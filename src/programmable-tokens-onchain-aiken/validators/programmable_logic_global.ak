@@ -1,11 +1,12 @@
-use aiken/collection/dict
+use aiken/collection/dict.{Dict}
 use aiken/collection/list
+use aiken/collection/pairs
 // Programmable Logic Global Stake Validator
 // This is the core CIP-0143 validator that coordinates all programmable token transfers
 // Migrated from SmartTokens.Contracts.ProgrammableLogicBase (mkProgrammableLogicGlobal)
 
 use cardano/address.{Credential, Inline, Script, VerificationKey}
-use cardano/assets.{PolicyId, Value, merge, policies, zero}
+use cardano/assets.{PolicyId, Value, ada_policy_id, merge, zero}
 use cardano/transaction.{Input, Output, Transaction}
 use types.{
   ProgrammableLogicGlobalParams, ProgrammableLogicGlobalRedeemer, RegistryNode,
@@ -114,7 +115,7 @@ fn validate_transfer(
 
   // Check transfer logic for each programmable token type and filter to only programmable tokens
   let validated_prog_value =
-    check_transfer_logic_and_filter(
+    check_transfer_and_compute_prog_value(
       total_prog_value,
       registry_node_cs,
       tx.reference_inputs,
@@ -157,8 +158,7 @@ fn validate_third_party(
   trace @"validate_third_party: processing multiple inputs"
 
   // Verify length parameter matches actual list length
-  expect list.length(input_idxs) == length_input_idxs
-
+  // expect list.length(input_idxs) == length_input_idxs
   // Get the registry node for this token policy
   let registry_ref_input = elem_at(tx.reference_inputs, registry_node_idx)
   let registry_datum = expect_inline_datum(registry_ref_input.output)
@@ -169,40 +169,43 @@ fn validate_third_party(
 
   // Process each input-output pair
   // For each input at input_idxs[i], there should be a corresponding output at outputs_start_idx + i
-  list.indexed_foldr(
-    input_idxs,
-    Void,
-    fn(idx, input_idx, _acc) {
-      // TODO: improvements Check if the inputs are ordered
-      // Get the input being processed
-      let input = elem_at(tx.inputs, input_idx)
+  let input_size =
+    list.indexed_foldr(
+      input_idxs,
+      0,
+      fn(idx, input_idx, acc) {
+        // TODO: improvements Check if the inputs are ordered
+        // Get the input being processed
+        let input = elem_at(tx.inputs, input_idx)
 
-      // Calculate corresponding output index
-      let output_idx = outputs_start_idx + idx
-      let output = elem_at(tx.outputs, output_idx)
+        // Calculate corresponding output index
+        let output_idx = outputs_start_idx + idx
+        let output = elem_at(tx.outputs, output_idx)
 
-      let expected_output_dict =
-        assets.to_dict(input.output.value) |> dict.delete(policy_id)
+        let expected_output_dict =
+          assets.to_dict(input.output.value) |> dict.delete(policy_id)
 
-      // // Filter the input value to only include tokens from this policy
-      // let filtered_value = restricted_to(input.output.value, [policy_id])
-      // // Expected output value is input value with policy tokens removed
-      // let expected_output_value =
-      //   merge(input.output.value, negate(filtered_value))
-      // Must be from prog_logic_cred
-      expect input.output.address.payment_credential == prog_logic_cred
-      // Validate the output matches expectations:
-      // - Same address
-      // - Value with tokens removed
-      // - Same datum
-      expect output.address == input.output.address
-      expect assets.to_dict(output.value) == expected_output_dict
-      expect output.datum == input.output.datum
-      // Prevent DDOS: must actually remove some tokens
-      expect assets.to_dict(input.output.value) != expected_output_dict
-    },
-  )
+        // // Filter the input value to only include tokens from this policy
+        // let filtered_value = restricted_to(input.output.value, [policy_id])
+        // // Expected output value is input value with policy tokens removed
+        // let expected_output_value =
+        //   merge(input.output.value, negate(filtered_value))
+        // Must be from prog_logic_cred
+        expect input.output.address.payment_credential == prog_logic_cred
+        // Validate the output matches expectations:
+        // - Same address
+        // - Value with tokens removed
+        // - Same datum
+        expect output.address == input.output.address
+        expect assets.to_dict(output.value) == expected_output_dict
+        expect output.datum == input.output.datum
+        // Prevent DDOS: must actually remove some tokens
+        expect assets.to_dict(input.output.value) != expected_output_dict
+        acc + 1
+      },
+    )
 
+  expect input_size == length_input_idxs
   // Verify that ONLY the specified inputs from prog_logic_cred are consumed
   // Count how many inputs from prog_logic_cred are in the transaction
   let prog_input_count =
@@ -290,31 +293,108 @@ fn get_signed_prog_value(tx: Transaction, prog_logic_cred: Credential) -> Value 
 //   list.foldl(inputs, zero, fn(input, acc) { merge(acc, input.output.value) })
 // }
 
+// fn check_transfer_logic_and_filter(
+//   value: Value,
+//   registry_node_cs: PolicyId,
+//   reference_inputs: List<Input>,
+//   proofs: List<RegistryProof>,
+//   invoked_scripts: List<Credential>,
+// ) -> Value {
+//   expect [_, ..currency_symbols] = policies(value)
+//   // For each currency symbol, check the proof
+//   validate_currency_symbols(
+//     currency_symbols,
+//     proofs,
+//     reference_inputs,
+//     registry_node_cs,
+//     invoked_scripts,
+//     value,
+//     // Pass the original value so we can filter by CS
+//     zero,
+//   )
+// }
+
 /// Get inputs from prog_logic_cred and verify ALL have proper authorization
 /// This function enforces ownership by requiring that every input from prog_logic_cred
 /// is authorized by its stake credential (signature or script invocation).
 /// If ANY input lacks authorization, the transaction FAILS.
 /// Sum values from a list of inputs
 /// Check transfer logic for each currency symbol and filter to only programmable tokens
-fn check_transfer_logic_and_filter(
+fn check_transfer_and_compute_prog_value(
   value: Value,
   registry_node_cs: PolicyId,
   reference_inputs: List<Input>,
   proofs: List<RegistryProof>,
   invoked_scripts: List<Credential>,
 ) -> Value {
-  expect [_, ..currency_symbols] = policies(value)
-  // For each currency symbol, check the proof
-  validate_currency_symbols(
-    currency_symbols,
-    proofs,
-    reference_inputs,
-    registry_node_cs,
-    invoked_scripts,
-    value,
-    // Pass the original value so we can filter by CS
-    zero,
-  )
+  let
+    remaining_proofs,
+    acc_value,
+  <-
+    do_check_transfer(
+      value
+        |> assets.to_dict
+        |> dict.to_pairs
+        |> pairs.delete_first(ada_policy_id),
+      registry_node_cs,
+      reference_inputs,
+      invoked_scripts,
+      proofs,
+      zero,
+    )
+  expect [] == remaining_proofs
+  acc_value
+}
+
+fn do_check_transfer(
+  my_value: Pairs<PolicyId, Dict<ByteArray, Int>>,
+  registry_node_cs: PolicyId,
+  reference_inputs: List<Input>,
+  invoked_scripts: List<Credential>,
+  proofs: List<RegistryProof>,
+  acc: Value,
+  return: fn(List<RegistryProof>, Value) -> result,
+) -> result {
+  when my_value is {
+    [] -> return(proofs, acc)
+    [Pair(cs, tokens), ..rest] ->
+      when proofs is {
+        [] -> fail @"Not enough proofs for currency symbols"
+        [proof, ..rest_proofs] -> {
+          let validated =
+            validate_single_cs(
+              cs,
+              proof,
+              reference_inputs,
+              registry_node_cs,
+              invoked_scripts,
+            )
+
+          let new_acc =
+            if validated {
+              // Add this CS's tokens from the original value to the accumulator
+              dict.foldl(
+                tokens,
+                acc,
+                fn(name, amount, acc) { assets.add(acc, cs, name, amount) },
+              )
+            } else {
+              // Not a programmable token, skip it
+              acc
+            }
+
+          do_check_transfer(
+            rest,
+            registry_node_cs,
+            reference_inputs,
+            invoked_scripts,
+            rest_proofs,
+            new_acc,
+            return,
+          )
+        }
+      }
+  }
 }
 
 /// Validate each currency symbol against proofs
