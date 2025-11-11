@@ -123,33 +123,23 @@ fn validate_transfer(
       invoked_scripts,
     )
 
-  // Ensure all programmable tokens go to outputs at prog_logic_cred
-  // AND that all such outputs have a stake credential (to prevent token locking)
-  let prog_outputs =
-    list.filter(
+  let output_prog_value =
+    list.foldl(
       tx.outputs,
-      fn(output) { output.address.payment_credential == prog_logic_cred },
-    )
-
-  // Validate that all prog_logic_cred outputs have stake credentials
-  // This prevents permanent token locking
-  let all_outputs_have_staking_credentials =
-    list.all(
-      prog_outputs,
-      fn(output) {
-        when output.address.stake_credential is {
-          Some(Inline(_)) -> True
-          _ -> False
+      assets.zero,
+      fn(output, acc) {
+        if output.address.payment_credential == prog_logic_cred {
+          expect Some(Inline(_stake_cred)) = output.address.stake_credential
+          // expensive
+          merge(acc, output.value)
+        } else {
+          acc
         }
       },
     )
 
-  let output_prog_value = sum_output_values(prog_outputs)
   // The output must contain all the validated programmable tokens
-  and {
-    all_outputs_have_staking_credentials?,
-    value_contains(output_prog_value, validated_prog_value)?,
-  }
+  value_contains(output_prog_value, validated_prog_value)?
 }
 
 /// Validate a third party action (seizure, freeze, etc.) on multiple UTxOs
