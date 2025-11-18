@@ -1,6 +1,8 @@
 package org.cardanofoundation.cip113.service;
 
 import com.bloxbean.cardano.yaci.store.utxo.domain.AddressUtxoEvent;
+import com.easy1staking.cardano.model.AssetType;
+import jakarta.transaction.Transactional;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
 import org.cardanofoundation.cip113.config.AppConfig;
@@ -19,23 +21,19 @@ public class ProtocolParamsEventListener {
     private final AppConfig.ProtocolParamsConfig protocolParamsConfig;
 
     @EventListener
+    @Transactional
     public void processEvent(AddressUtxoEvent addressUtxoEvent) {
-        log.info("Processing AddressUtxoEvent with {} transactions", addressUtxoEvent.getTxInputOutputs().size());
-
-        var txIds = String.join(",", protocolParamsConfig.getTransactionIds());
-
-        log.info("txIds: {}", txIds);
+        log.debug("Processing AddressUtxoEvent with {} transactions", addressUtxoEvent.getTxInputOutputs().size());
 
         var slot = addressUtxoEvent.getEventMetadata().getSlot();
         var blockHeight = addressUtxoEvent.getEventMetadata().getBlock();
 
         addressUtxoEvent.getTxInputOutputs()
                 .stream()
-                .filter(txInputOutput -> {
-                    log.info("tx: {}", txInputOutput.getTxHash());
-                    return protocolParamsConfig.getTransactionIds().contains(txInputOutput.getTxHash());
-                })
+                .filter(txInputOutput -> protocolParamsConfig.getTransactionIds().contains(txInputOutput.getTxHash()))
                 .flatMap(txInputOutputs -> txInputOutputs.getOutputs().stream())
+                .filter(addressUtxo -> addressUtxo.getInlineDatum() != null && addressUtxo.getAmounts()
+                        .stream().anyMatch(amt -> "ProtocolParams".equals(AssetType.fromUnit(amt.getUnit()).unsafeHumanAssetName())))
                 .forEach(addressUtxo -> {
 
                     var txHash = addressUtxo.getTxHash();

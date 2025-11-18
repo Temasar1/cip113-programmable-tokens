@@ -23,8 +23,15 @@ public class ProtocolParamsParser {
             var jsonData = objectMapper.readTree(objectMapper.writeValueAsString(data));
             log.info("jsonData: {}", jsonData);
 
-            var registryNodePolicyId = jsonData.path("fields").get(0).path("bytes").asText();
-            var programmableLogicBaseScriptHash = jsonData.path("fields").get(1).path("fields").get(0).path("bytes").asText();
+            String rootName;
+            if (jsonData.has("constructor")) {
+                rootName = "fields";
+            } else {
+                rootName = "list";
+            }
+
+            var registryNodePolicyId = jsonData.path(rootName).get(0).path("bytes").asText();
+            var programmableLogicBaseScriptHash = jsonData.path(rootName).get(1).path("fields").get(0).path("bytes").asText();
 
             return Optional.of(ProtocolParams.builder()
                     .registryNodePolicyId(registryNodePolicyId)

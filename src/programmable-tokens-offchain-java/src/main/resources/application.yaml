@@ -62,7 +62,11 @@ store:
     port: 0
     protocol-magic: 2
     # Start from the block that minted the ref input for the contract
-    sync-start-blockhash: e7090a1847bcd8df1c5d2ab4db6c670d80eb85aec154edbc040c981b77953258
-    sync-start-slot: 96214546
+    # PlutArch
+    sync-start-blockhash: c196c1915bf07235284131d5f84b395061477285d74aba8634a82b5c2b22ed2f
+    sync-start-slot: 69599150
+    # Aiken
+#    sync-start-blockhash: e7090a1847bcd8df1c5d2ab4db6c670d80eb85aec154edbc040c981b77953258
+#    sync-start-slot: 96214546
   blocks:
     epoch-calculation-interval=14400:  # 14400 = 4 hours
