@@ -1,20 +1,24 @@
 package org.cardanofoundation.cip113.service;
 
-import com.bloxbean.cardano.yaci.store.common.domain.AddressUtxo;
+import com.bloxbean.cardano.client.transaction.spec.Value;
 import com.bloxbean.cardano.yaci.store.common.domain.Amt;
 import com.bloxbean.cardano.yaci.store.utxo.domain.AddressUtxoEvent;
-import com.bloxbean.cardano.yaci.store.utxo.storage.impl.model.AddressUtxoEntity;
+import com.bloxbean.cardano.yaci.store.utxo.storage.impl.model.UtxoId;
 import com.bloxbean.cardano.yaci.store.utxo.storage.impl.repository.UtxoRepository;
+import com.easy1staking.cardano.util.AmountUtil;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
 import org.cardanofoundation.cip113.entity.BalanceLogEntity;
 import org.cardanofoundation.cip113.entity.ProtocolParamsEntity;
 import org.cardanofoundation.cip113.util.AddressUtil;
+import org.cardanofoundation.cip113.util.BalanceValueHelper;
 import org.springframework.context.event.EventListener;
 import org.springframework.stereotype.Service;
 
-import java.math.BigInteger;
-import java.util.*;
+import java.util.HashMap;
+import java.util.List;
+import java.util.Map;
+import java.util.Set;
 import java.util.stream.Collectors;
 
 @Service
@@ -24,9 +28,7 @@ public class BalanceEventListener {
 
     private final BalanceService balanceService;
     private final ProtocolParamsService protocolParamsService;
-    private final RegistryService registryService;
     private final UtxoRepository utxoRepository;
-
 
     @EventListener
     public void processEvent(AddressUtxoEvent addressUtxoEvent) {
@@ -51,146 +53,121 @@ public class BalanceEventListener {
         var blockHeight = addressUtxoEvent.getEventMetadata().getBlock();
 
         // Process each transaction
-        addressUtxoEvent.getTxInputOutputs().forEach(txInputOutputs -> {
-            String txHash = txInputOutputs.getTxHash();
+        addressUtxoEvent.getTxInputOutputs()
+                .forEach(txInputOutputs -> {
+                    String txHash = txInputOutputs.getTxHash();
 
-            // Track balance changes per address per asset
-            // Key: address + "|" + policyId + "|" + assetName
-            // Value: net change (outputs - inputs)
-            Map<String, BalanceChange> balanceChanges = new HashMap<>();
+                    // Track balance changes per address using Value objects
+                    // Key: address, Value: net balance change
+                    Map<String, BalanceAggregator> balanceChanges = new HashMap<>();
 
-            // Process inputs (subtractions)
-            // Inputs don't have addresses directly, need to look up the UTxO being spent
-            txInputOutputs.getInputs().forEach(input -> {
-                // Look up the UTxO by txHash and outputIndex
-                String inputTxHash = input.getTxHash();
-                int outputIndex = input.getOutputIndex();
+                    // Process inputs (subtractions) - need to look up UTxOs
+                    txInputOutputs.getInputs().forEach(input -> {
+                        String inputTxHash = input.getTxHash();
+                        int outputIndex = input.getOutputIndex();
 
-                // Create composite key for UTxO lookup
-                var utxoIdOpt = utxoRepository.findById(
-                    new com.bloxbean.cardano.yaci.store.utxo.storage.impl.model.UtxoId(inputTxHash, outputIndex)
-                );
+                        // Look up the UTxO
+                        var utxoOpt = utxoRepository.findById(new UtxoId(inputTxHash, outputIndex));
 
-                if (utxoIdOpt.isEmpty()) {
-                    log.debug("UTxO not found for input: {}:{}", inputTxHash, outputIndex);
-                    return;
-                }
+                        if (utxoOpt.isEmpty()) {
+                            log.debug("UTxO not found for input: {}:{}", inputTxHash, outputIndex);
+                            return;
+                        }
 
-                var utxo = utxoIdOpt.get();
-                String address = utxo.getOwnerAddr();
+                        var utxo = utxoOpt.get();
+                        String address = utxo.getOwnerAddr();
 
-                AddressUtil.AddressComponents components = AddressUtil.decompose(address);
-                if (components != null && progLogicScriptHashes.contains(components.getPaymentScriptHash())) {
-                    // Convert UTxO entity to AddressUtxo for processing
-                    processUtxo(utxo.getAmounts(), components, balanceChanges, false);
-                }
-            });
+                        AddressUtil.AddressComponents components = AddressUtil.decompose(address);
+                        if (components != null && progLogicScriptHashes.contains(components.getPaymentScriptHash())) {
+                            // Convert UTxO amounts to Value and subtract
+                            Value inputValue = amountsToValue(utxo.getAmounts());
 
-            // Process outputs (additions)
-            txInputOutputs.getOutputs().forEach(output -> {
-                AddressUtil.AddressComponents components = AddressUtil.decompose(output.getOwnerAddr());
-                if (components != null && progLogicScriptHashes.contains(components.getPaymentScriptHash())) {
-                    processUtxo(output.getAmounts(), components, balanceChanges, true);
-                }
-            });
+                            BalanceAggregator aggregator = balanceChanges.computeIfAbsent(address,
+                                    k -> new BalanceAggregator(address, components));
+                            aggregator.subtractInput(inputValue);
+                        }
+                    });
 
-            // Save balance changes to database
-            balanceChanges.forEach((key, change) -> {
-                // Get previous balance
-                BigInteger previousBalance = balanceService.getLatestBalance(
-                        change.address,
-                        change.policyId,
-                        change.assetName
-                ).map(BalanceLogEntity::getQuantity).orElse(BigInteger.ZERO);
+                    // Process outputs (additions)
+                    txInputOutputs.getOutputs().forEach(output -> {
+                        String address = output.getOwnerAddr();
 
-                // Calculate new balance
-                BigInteger newBalance = previousBalance.add(change.netChange);
+                        AddressUtil.AddressComponents components = AddressUtil.decompose(address);
+                        if (components != null && progLogicScriptHashes.contains(components.getPaymentScriptHash())) {
+                            // Convert output amounts to Value and add
+                            Value outputValue = amountsToValue(output.getAmounts());
 
-                // Check if asset is programmable token
-                boolean isProgrammableToken = registryService.isTokenRegistered(change.policyId);
+                            BalanceAggregator aggregator = balanceChanges.computeIfAbsent(address,
+                                    k -> new BalanceAggregator(address, components));
+                            aggregator.addOutput(outputValue);
+                        }
+                    });
 
-                // Create balance log entry
-                BalanceLogEntity entry = BalanceLogEntity.builder()
-                        .address(change.address)
-                        .paymentScriptHash(change.paymentScriptHash)
-                        .stakeKeyHash(change.stakeKeyHash)
-                        .txHash(txHash)
-                        .slot(slot)
-                        .blockHeight(blockHeight)
-                        .policyId(change.policyId)
-                        .assetName(change.assetName)
-                        .quantity(newBalance)
-                        .isProgrammableToken(isProgrammableToken)
-                        .build();
+                    // Save balance changes to database
+                    balanceChanges.forEach((address, aggregator) -> {
+                        // Get previous balance
+                        Value previousBalance = balanceService.getCurrentBalanceAsValue(address);
 
-                balanceService.append(entry);
+                        // Calculate new balance: previous + outputs - inputs
+                        Value newBalance = previousBalance.plus(aggregator.getNetChange());
 
-                log.info("Recorded balance change: address={}, asset={}/{}, prev={}, change={}, new={}, tx={}",
-                        change.address, change.policyId, change.assetName,
-                        previousBalance, change.netChange, newBalance, txHash);
-            });
-        });
+                        // Convert to JSON
+                        String balanceJson = BalanceValueHelper.toJson(newBalance);
+
+                        // Create balance log entry
+                        BalanceLogEntity entity = BalanceLogEntity.builder()
+                                .address(address)
+                                .paymentScriptHash(aggregator.getComponents().getPaymentScriptHash())
+                                .stakeKeyHash(aggregator.getComponents().getStakeKeyHash())
+                                .txHash(txHash)
+                                .slot(slot)
+                                .blockHeight(blockHeight)
+                                .balance(balanceJson)
+                                .build();
+
+                        balanceService.append(entity);
+
+                        log.info("Recorded balance change: address={}, tx={}, new_balance={}",
+                                address, txHash, balanceJson);
+                    });
+                });
     }
 
-    private void processUtxo(List<Amt> amounts, AddressUtil.AddressComponents components,
-                             Map<String, BalanceChange> balanceChanges, boolean isOutput) {
-        String address = components.getFullAddress();
-        String paymentScriptHash = components.getPaymentScriptHash();
-        String stakeKeyHash = components.getStakeKeyHash();
-
-        // Process each asset in the UTxO
-        amounts.forEach(amount -> {
-            String unit = amount.getUnit();
-            BigInteger quantity = amount.getQuantity();
-
-            String policyId;
-            String assetName;
-
-            if ("lovelace".equals(unit)) {
-                policyId = "ADA";
-                assetName = null;
-            } else {
-                // Native asset: unit format is policyId + assetName
-                // PolicyId is 56 hex chars (28 bytes)
-                if (unit.length() >= 56) {
-                    policyId = unit.substring(0, 56);
-                    assetName = unit.length() > 56 ? unit.substring(56) : null;
-                } else {
-                    log.warn("Invalid asset unit format: {}", unit);
-                    return;
-                }
-            }
-
-            String key = address + "|" + policyId + "|" + assetName;
-
-            BalanceChange change = balanceChanges.computeIfAbsent(key, k ->
-                    new BalanceChange(address, paymentScriptHash, stakeKeyHash, policyId, assetName)
-            );
-
-            // Add if output, subtract if input
-            if (isOutput) {
-                change.netChange = change.netChange.add(quantity);
-            } else {
-                change.netChange = change.netChange.subtract(quantity);
-            }
-        });
+    /**
+     * Convert list of Amt to Value object
+     */
+    private Value amountsToValue(List<Amt> amounts) {
+        return amounts.stream().map(AmountUtil::toValue).reduce(Value.builder().build(), Value::add);
     }
 
-    private static class BalanceChange {
-        String address;
-        String paymentScriptHash;
-        String stakeKeyHash;
-        String policyId;
-        String assetName;
-        BigInteger netChange = BigInteger.ZERO;
+    /**
+     * Helper class to aggregate balance changes per address
+     */
+    private static class BalanceAggregator {
+        private final String address;
+        private final AddressUtil.AddressComponents components;
+        private Value netChange;
 
-        BalanceChange(String address, String paymentScriptHash, String stakeKeyHash,
-                      String policyId, String assetName) {
+        BalanceAggregator(String address, AddressUtil.AddressComponents components) {
             this.address = address;
-            this.paymentScriptHash = paymentScriptHash;
-            this.stakeKeyHash = stakeKeyHash;
-            this.policyId = policyId;
-            this.assetName = assetName;
+            this.components = components;
+            this.netChange = BalanceValueHelper.empty();
+        }
+
+        void addOutput(Value value) {
+            netChange = netChange.add(value);
+        }
+
+        void subtractInput(Value value) {
+            netChange = netChange.subtract(value);
+        }
+
+        Value getNetChange() {
+            return netChange;
+        }
+
+        AddressUtil.AddressComponents getComponents() {
+            return components;
         }
     }
 }

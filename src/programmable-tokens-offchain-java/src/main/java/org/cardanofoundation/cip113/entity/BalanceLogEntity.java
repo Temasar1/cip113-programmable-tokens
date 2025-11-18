@@ -16,11 +16,9 @@ import java.time.LocalDateTime;
     @Index(name = "idx_balance_stake_key", columnList = "stakeKeyHash"),
     @Index(name = "idx_balance_payment_stake", columnList = "paymentScriptHash, stakeKeyHash"),
     @Index(name = "idx_balance_tx_hash", columnList = "txHash"),
-    @Index(name = "idx_balance_slot", columnList = "slot"),
-    @Index(name = "idx_balance_policy", columnList = "policyId"),
-    @Index(name = "idx_balance_addr_asset_slot", columnList = "address, policyId, assetName, slot")
+    @Index(name = "idx_balance_slot", columnList = "slot")
 }, uniqueConstraints = {
-    @UniqueConstraint(name = "unique_balance_entry", columnNames = {"address", "policyId", "assetName", "txHash"})
+    @UniqueConstraint(name = "unique_balance_entry", columnNames = {"address", "txHash"})
 })
 @Data
 @Builder
@@ -52,20 +50,9 @@ public class BalanceLogEntity {
     @Column(nullable = false)
     private Long blockHeight;
 
-    // Asset Information
-    @Column(nullable = false, length = 56)
-    private String policyId; // "ADA" for lovelace
-
-    @Column(length = 128)
-    private String assetName; // NULL for ADA
-
-    // Balance State (after this transaction)
-    @Column(nullable = false)
-    private BigInteger quantity;
-
-    // Asset Classification (from registry lookup)
-    @Column(nullable = false)
-    private Boolean isProgrammableToken;
+    // Balance State (after this transaction) - JSON format: {"lovelace": "1000000", "unit": "amount"}
+    @Column(nullable = false, columnDefinition = "TEXT")
+    private String balance;
 
     @Column(nullable = false, updatable = false)
     private LocalDateTime createdAt;

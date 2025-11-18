@@ -1,9 +1,11 @@
 package org.cardanofoundation.cip113.service;
 
+import com.bloxbean.cardano.client.transaction.spec.Value;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
 import org.cardanofoundation.cip113.entity.BalanceLogEntity;
 import org.cardanofoundation.cip113.repository.BalanceLogRepository;
+import org.cardanofoundation.cip113.util.BalanceValueHelper;
 import org.springframework.data.domain.PageRequest;
 import org.springframework.data.domain.Pageable;
 import org.springframework.stereotype.Service;
@@ -11,6 +13,7 @@ import org.springframework.transaction.annotation.Transactional;
 
 import java.math.BigInteger;
 import java.util.List;
+import java.util.Map;
 import java.util.Optional;
 
 @Service
@@ -29,92 +32,87 @@ public class BalanceService {
     @Transactional
     public BalanceLogEntity append(BalanceLogEntity entity) {
         // Check if entry already exists (idempotency)
-        if (repository.existsByAddressAndPolicyIdAndAssetNameAndTxHash(
-                entity.getAddress(),
-                entity.getPolicyId(),
-                entity.getAssetName(),
-                entity.getTxHash()
-        )) {
-            log.debug("Balance entry already exists, skipping: address={}, asset={}/{}, tx={}",
-                    entity.getAddress(), entity.getPolicyId(), entity.getAssetName(), entity.getTxHash());
+        if (repository.existsByAddressAndTxHash(entity.getAddress(), entity.getTxHash())) {
+            log.debug("Balance entry already exists, skipping: address={}, tx={}",
+                    entity.getAddress(), entity.getTxHash());
             return entity;
         }
 
-        log.info("Appending balance entry: address={}, asset={}/{}, quantity={}, tx={}",
-                entity.getAddress(), entity.getPolicyId(), entity.getAssetName(),
-                entity.getQuantity(), entity.getTxHash());
+        log.info("Appending balance entry: address={}, tx={}, slot={}",
+                entity.getAddress(), entity.getTxHash(), entity.getSlot());
 
         return repository.save(entity);
     }
 
     /**
-     * Get the latest balance for a specific address and asset
+     * Get the latest balance for an address
      *
      * @param address the address
-     * @param policyId the asset policy ID
-     * @param assetName the asset name (null for ADA)
-     * @return the latest balance or empty if no history
+     * @return the latest balance entry or empty if no history
      */
-    public Optional<BalanceLogEntity> getLatestBalance(String address, String policyId, String assetName) {
-        return repository.findLatestByAddressAndAsset(address, policyId, assetName, PageRequest.of(0, 1))
+    public Optional<BalanceLogEntity> getLatestBalance(String address) {
+        return repository.findLatestByAddress(address, PageRequest.of(0, 1))
                 .stream()
                 .findFirst();
     }
 
     /**
-     * Get all latest balances for an address (one per asset)
+     * Get the current balance as a Value object
      *
      * @param address the address
-     * @return list of latest balances
+     * @return Value object representing current balance
      */
-    public List<BalanceLogEntity> getAllLatestBalances(String address) {
-        return repository.findAllLatestByAddress(address);
+    public Value getCurrentBalanceAsValue(String address) {
+        return getLatestBalance(address)
+                .map(entity -> BalanceValueHelper.fromJson(entity.getBalance()))
+                .orElse(BalanceValueHelper.empty());
     }
 
     /**
-     * Get balance history for a specific address and asset
+     * Get the current balance as a unit map
      *
      * @param address the address
-     * @param policyId the asset policy ID
-     * @param assetName the asset name (null for ADA)
+     * @return map of unit to amount (as string)
+     */
+    public Map<String, String> getCurrentBalanceByUnit(String address) {
+        return getLatestBalance(address)
+                .map(entity -> {
+                    Value value = BalanceValueHelper.fromJson(entity.getBalance());
+                    return BalanceValueHelper.toUnitMap(value);
+                })
+                .orElse(Map.of());
+    }
+
+    /**
+     * Get balance history for an address
+     *
+     * @param address the address
      * @param limit maximum number of entries to return
      * @return list of balance entries (ordered by slot DESC)
      */
-    public List<BalanceLogEntity> getBalanceHistory(String address, String policyId, String assetName, int limit) {
+    public List<BalanceLogEntity> getBalanceHistory(String address, int limit) {
         Pageable pageable = PageRequest.of(0, limit);
-        return repository.findHistoryByAddressAndAsset(address, policyId, assetName, pageable);
+        return repository.findHistoryByAddress(address, pageable);
     }
 
     /**
-     * Get all balance entries for an address (all assets)
-     *
-     * @param address the address
-     * @param limit maximum number of entries to return
-     * @return list of balance entries (ordered by slot DESC)
-     */
-    public List<BalanceLogEntity> getAllBalanceHistory(String address, int limit) {
-        Pageable pageable = PageRequest.of(0, limit);
-        return repository.findAllByAddressOrderBySlotDesc(address, pageable);
-    }
-
-    /**
-     * Get latest balances by payment script hash
+     * Get latest balances by payment script hash (one per address)
      *
      * @param paymentScriptHash the payment script hash
-     * @return list of latest balances
+     * @return list of latest balance entries
      */
     public List<BalanceLogEntity> getLatestBalancesByPaymentScript(String paymentScriptHash) {
-        return repository.findAllLatestByPaymentScriptHash(paymentScriptHash);
+        return repository.findLatestByPaymentScriptHash(paymentScriptHash);
     }
 
     /**
      * Get latest balances by stake key hash
      *
      * @param stakeKeyHash the stake key hash
-     * @return list of latest balances
+     * @return list of latest balance entries
      */
     public List<BalanceLogEntity> getLatestBalancesByStakeKey(String stakeKeyHash) {
-        return repository.findAllLatestByStakeKeyHash(stakeKeyHash);
+        return repository.findLatestByStakeKeyHash(stakeKeyHash);
     }
 
     /**
@@ -122,11 +120,11 @@ public class BalanceService {
      *
      * @param paymentScriptHash the payment script hash
      * @param stakeKeyHash the stake key hash
-     * @return list of latest balances
+     * @return list of latest balance entries
      */
     public List<BalanceLogEntity> getLatestBalancesByPaymentScriptAndStakeKey(
             String paymentScriptHash, String stakeKeyHash) {
-        return repository.findAllLatestByPaymentScriptHashAndStakeKeyHash(paymentScriptHash, stakeKeyHash);
+        return repository.findLatestByPaymentScriptHashAndStakeKeyHash(paymentScriptHash, stakeKeyHash);
     }
 
     /**
@@ -136,31 +134,25 @@ public class BalanceService {
      * @return list of balance entries
      */
     public List<BalanceLogEntity> getBalancesByTransaction(String txHash) {
-        return repository.findAllByTxHash(txHash);
+        return repository.findByTxHash(txHash);
     }
 
     /**
-     * Get only programmable token balances for an address
-     *
-     * @param address the address
-     * @return list of programmable token balances
-     */
-    public List<BalanceLogEntity> getProgrammableTokenBalances(String address) {
-        return repository.findProgrammableTokenBalancesByAddress(address);
-    }
-
-    /**
-     * Calculate balance difference between current and previous entry
+     * Calculate balance difference between two entries using Value subtraction
      *
      * @param currentEntry the current balance entry
      * @param previousEntry the previous balance entry (or null if first)
-     * @return the balance difference (positive or negative)
+     * @return Value representing the difference
      */
-    public BigInteger calculateBalanceDiff(BalanceLogEntity currentEntry, BalanceLogEntity previousEntry) {
+    public Value calculateBalanceDiff(BalanceLogEntity currentEntry, BalanceLogEntity previousEntry) {
+        Value currentValue = BalanceValueHelper.fromJson(currentEntry.getBalance());
+
         if (previousEntry == null) {
-            return currentEntry.getQuantity();
+            return currentValue;
         }
-        return currentEntry.getQuantity().subtract(previousEntry.getQuantity());
+
+        Value previousValue = BalanceValueHelper.fromJson(previousEntry.getBalance());
+        return currentValue.minus(previousValue);
     }
 
     /**
@@ -170,20 +162,44 @@ public class BalanceService {
      * @return the previous entry or empty if this is the first
      */
     public Optional<BalanceLogEntity> getPreviousBalance(BalanceLogEntity entry) {
-        List<BalanceLogEntity> history = repository.findHistoryByAddressAndAsset(
+        List<BalanceLogEntity> history = repository.findHistoryByAddress(
                 entry.getAddress(),
-                entry.getPolicyId(),
-                entry.getAssetName(),
                 PageRequest.of(0, 2)
         );
 
-        // Find the entry before this one
+        // Find the entry before this one (by slot)
         for (BalanceLogEntity historyEntry : history) {
-            if (!historyEntry.getId().equals(entry.getId())) {
+            if (!historyEntry.getId().equals(entry.getId()) &&
+                historyEntry.getSlot() < entry.getSlot()) {
                 return Optional.of(historyEntry);
             }
         }
 
         return Optional.empty();
+    }
+
+    /**
+     * Extract a specific asset amount from a balance
+     *
+     * @param balance the balance JSON string
+     * @param unit the asset unit (e.g., "lovelace" or "policyId+assetName")
+     * @return the amount or zero if not found
+     */
+    public BigInteger getAssetAmount(String balance, String unit) {
+        Value value = BalanceValueHelper.fromJson(balance);
+        Map<String, String> unitMap = BalanceValueHelper.toUnitMap(value);
+        String amountStr = unitMap.get(unit);
+        return amountStr != null ? new BigInteger(amountStr) : BigInteger.ZERO;
+    }
+
+    /**
+     * Check if an address has a balance entry
+     *
+     * @param address the address
+     * @param txHash the transaction hash
+     * @return true if exists
+     */
+    public boolean exists(String address, String txHash) {
+        return repository.existsByAddressAndTxHash(address, txHash);
     }
 }
