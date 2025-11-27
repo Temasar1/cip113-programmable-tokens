@@ -6,10 +6,12 @@ import lombok.Getter;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
 import org.cardanofoundation.cip113.model.blueprint.Plutus;
+import org.cardanofoundation.cip113.model.blueprint.Validator;
 import org.cardanofoundation.cip113.model.bootstrap.ProtocolBootstrapParams;
 import org.springframework.stereotype.Service;
 
 import java.io.IOException;
+import java.util.Optional;
 
 @Service
 @RequiredArgsConstructor
@@ -28,12 +30,15 @@ public class ProtocolBootstrapService {
     public void init() {
         try {
             protocolBootstrapParams = objectMapper.readValue(this.getClass().getClassLoader().getResourceAsStream("protocolBootstrap.json"), ProtocolBootstrapParams.class);
-             plutus = objectMapper.readValue(this.getClass().getClassLoader().getResourceAsStream("plutus.json"), Plutus.class);
+            plutus = objectMapper.readValue(this.getClass().getClassLoader().getResourceAsStream("plutus.json"), Plutus.class);
         } catch (IOException e) {
             log.error("could not load bootstrap or protocol blueprint");
             throw new RuntimeException(e);
         }
+    }
 
+    public Optional<String> getProtocolContract(String contractTitle) {
+        return plutus.validators().stream().filter(validator -> validator.title().equals(contractTitle)).findAny().map(Validator::compiledCode);
     }
 
 }

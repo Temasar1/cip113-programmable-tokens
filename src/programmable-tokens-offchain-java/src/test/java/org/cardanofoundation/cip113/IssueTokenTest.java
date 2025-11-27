@@ -11,6 +11,7 @@ import com.bloxbean.cardano.client.plutus.blueprint.PlutusBlueprintUtil;
 import com.bloxbean.cardano.client.plutus.blueprint.model.PlutusVersion;
 import com.bloxbean.cardano.client.plutus.spec.*;
 import com.bloxbean.cardano.client.quicktx.ScriptTx;
+import com.bloxbean.cardano.client.quicktx.Tx;
 import com.bloxbean.cardano.client.transaction.spec.Asset;
 import com.bloxbean.cardano.client.transaction.spec.MultiAsset;
 import com.bloxbean.cardano.client.transaction.spec.TransactionInput;
@@ -295,6 +296,193 @@ public class IssueTokenTest extends AbstractPreviewTest {
                 log.warn("error: {}", result.getResponse());
             }
         }
+
+    }
+
+
+    @Test
+    public void mintOnly() throws Exception {
+
+        var dryRun = true;
+
+        var bootstrapTxHash = protocolBootstrapParams.txHash();
+
+        var protocolParamsUtxoOpt = bfBackendService.getUtxoService().getTxOutput(bootstrapTxHash, 0);
+        if (!protocolParamsUtxoOpt.isSuccessful()) {
+            Assertions.fail("could not fetch protocol params utxo");
+        }
+        var protocolParamsUtxo = protocolParamsUtxoOpt.getValue();
+        log.info("protocolParamsUtxo: {}", protocolParamsUtxo);
+
+        var issuanceUtxoOpt = bfBackendService.getUtxoService().getTxOutput(bootstrapTxHash, 2);
+        if (!issuanceUtxoOpt.isSuccessful()) {
+            Assertions.fail("could not fetch issuance utxo");
+        }
+        var issuanceUtxo = issuanceUtxoOpt.getValue();
+        log.info("issuanceUtxo: {}", issuanceUtxo);
+
+        var issuanceDatum = issuanceUtxo.getInlineDatum();
+        var issuanceData = PlutusData.deserialize(HexUtil.decodeHexString(issuanceDatum));
+        var issuance = OBJECT_MAPPER.writeValueAsString(issuanceData);
+        log.info("issuance: {}", issuance);
+
+        var programmableLogicBaseScriptHash = protocolBootstrapParams.programmableLogicBaseParams().scriptHash();
+
+        var utxosOpt = bfBackendService.getUtxoService().getUtxos(adminAccount.baseAddress(), 100, 1);
+        if (!utxosOpt.isSuccessful() || utxosOpt.getValue().isEmpty()) {
+            Assertions.fail("no utxos available");
+        }
+        var walletUtxos = utxosOpt.getValue();
+
+        var directoryUtxoOpt = bfBackendService.getUtxoService().getTxOutput(bootstrapTxHash, 1);
+        if (!directoryUtxoOpt.isSuccessful()) {
+            Assertions.fail("no directory utxo found");
+        }
+        var directoryUtxo = directoryUtxoOpt.getValue();
+        log.info("directoryUtxo: {}", directoryUtxo);
+        var directorySetNode = DirectorySetNode.fromInlineDatum(directoryUtxo.getInlineDatum());
+        if (directorySetNode.isEmpty()) {
+            log.info("could not deserialise directorySetNode for utxo: {}", directoryUtxo);
+            Assertions.fail();
+        }
+        log.info("directorySetNode: {}", directorySetNode);
+
+        var substandardIssueContract = PlutusBlueprintUtil.getPlutusScriptFromCompiledCode(SUBSTANDARD_ISSUE_CONTRACT, PlutusVersion.v3);
+        log.info("substandardIssueContract: {}", substandardIssueContract.getPolicyId());
+
+        var substandardIssueAddress = AddressProvider.getRewardAddress(substandardIssueContract, network);
+        log.info("substandardIssueAddress: {}", substandardIssueAddress.getAddress());
+
+
+        // Issuance Parameterization
+        var issuanceParameters = ListPlutusData.of(
+                ConstrPlutusData.of(1,
+                        BytesPlutusData.of(HexUtil.decodeHexString(programmableLogicBaseScriptHash))
+                ),
+                ConstrPlutusData.of(1,
+                        BytesPlutusData.of(substandardIssueContract.getScriptHash())
+                )
+        );
+        var issuanceContract = PlutusBlueprintUtil.getPlutusScriptFromCompiledCode(AikenScriptUtil.applyParamToScript(issuanceParameters, ISSUANCE_MINT), PlutusVersion.v3);
+        log.info("issuanceContract: {}", issuanceContract.getPolicyId());
+
+        var issuanceRedeemer = ConstrPlutusData.of(0, ConstrPlutusData.of(1, BytesPlutusData.of(substandardIssueContract.getScriptHash())));
+//        var issuanceRedeemer = ConstrPlutusData.of(0, BytesPlutusData.of(substandardIssueContract.getScriptHash()));
+
+        // Directory MINT parameterization
+        log.info("protocolBootstrapParams.directoryMintParams(): {}", protocolBootstrapParams.directoryMintParams());
+        var directoryMintParameters = ListPlutusData.of(
+                ConstrPlutusData.of(0,
+                        BytesPlutusData.of(HexUtil.decodeHexString(protocolBootstrapParams.directoryMintParams().txInput().txHash())),
+                        BigIntPlutusData.of(protocolBootstrapParams.directoryMintParams().txInput().outputIndex())),
+                BytesPlutusData.of(HexUtil.decodeHexString(protocolBootstrapParams.directoryMintParams().issuanceScriptHash()))
+        );
+        var directoryMintContract = PlutusBlueprintUtil.getPlutusScriptFromCompiledCode(AikenScriptUtil.applyParamToScript(directoryMintParameters, DIRECTORY_MINT_CONTRACT), PlutusVersion.v3);
+        log.info("directoryMintContract: {}", directoryMintContract.getPolicyId());
+
+        // Directory SPEND parameterization
+        var directorySpendParameters = ListPlutusData.of(
+                BytesPlutusData.of(HexUtil.decodeHexString(protocolBootstrapParams.protocolParams().scriptHash()))
+        );
+        var directorySpendContract = PlutusBlueprintUtil.getPlutusScriptFromCompiledCode(AikenScriptUtil.applyParamToScript(directorySpendParameters, DIRECTORY_SPEND_CONTRACT), PlutusVersion.v3);
+        log.info("directorySpendContract, policy: {}", directorySpendContract.getPolicyId());
+        log.info("directorySpendContract, script hash: {}", HexUtil.encodeHexString(directorySpendContract.getScriptHash()));
+        var directorySpendContractAddress = AddressProvider.getEntAddress(Credential.fromScript(directorySpendContract.getScriptHash()), network);
+        log.info("directorySpendContractAddress: {}", directorySpendContractAddress.getAddress());
+
+
+        // Programmable Token Mint
+        var pintToken = Asset.builder()
+                .name(HexUtil.encodeHexString("PINT".getBytes(), true))
+                .value(BigInteger.valueOf(1_000_000_000L))
+                .build();
+
+        Value pintTokenValue = Value.builder()
+                .coin(Amount.ada(1).getQuantity())
+                .multiAssets(List.of(
+                        MultiAsset.builder()
+                                .policyId(issuanceContract.getPolicyId())
+                                .assets(List.of(pintToken))
+                                .build()
+                ))
+                .build();
+
+        var targetAddress = AddressProvider.getBaseAddress(Credential.fromScript(protocolBootstrapParams.programmableLogicBaseParams().scriptHash()),
+                aliceAccount.getBaseAddress().getDelegationCredential().get(),
+                network);
+
+        var tx = new ScriptTx()
+                .collectFrom(walletUtxos)
+                .withdraw(substandardIssueAddress.getAddress(), BigInteger.ZERO, BigIntPlutusData.of(100))
+                // Redeemer is DirectoryInit (constr(0))
+                .mintAsset(issuanceContract, pintToken, issuanceRedeemer)
+                .payToContract(targetAddress.getAddress(), ValueUtil.toAmountList(pintTokenValue), ConstrPlutusData.of(0))
+                .attachRewardValidator(substandardIssueContract)
+                .withChangeAddress(adminAccount.baseAddress());
+
+        var transaction = quickTxBuilder.compose(tx)
+                .withSigner(SignerProviders.signerFrom(adminAccount))
+                .withTxEvaluator(new AikenTransactionEvaluator(bfBackendService))
+                .feePayer(adminAccount.baseAddress())
+                .mergeOutputs(false) //<-- this is important! or directory tokens will go to same address
+                .preBalanceTx((txBuilderContext, transaction1) -> {
+                    var outputs = transaction1.getBody().getOutputs();
+                    if (outputs.getFirst().getAddress().equals(adminAccount.baseAddress())) {
+                        log.info("found dummy input, moving it...");
+                        var first = outputs.removeFirst();
+                        outputs.addLast(first);
+                    }
+                    try {
+                        log.info("pre tx: {}", OBJECT_MAPPER.writeValueAsString(transaction1));
+                    } catch (JsonProcessingException e) {
+                        throw new RuntimeException(e);
+                    }
+                })
+                .postBalanceTx((txBuilderContext, transaction1) -> {
+                    try {
+                        log.info("post tx: {}", OBJECT_MAPPER.writeValueAsString(transaction1));
+                    } catch (JsonProcessingException e) {
+                        throw new RuntimeException(e);
+                    }
+                })
+                .buildAndSign();
+
+        log.info("tx: {}", transaction.serializeToHex());
+        log.info("tx: {}", OBJECT_MAPPER.writeValueAsString(transaction));
+
+        if (!dryRun) {
+            var result = bfBackendService.getTransactionService().submitTransaction(transaction.serialize());
+            if (result.isSuccessful()) {
+                log.info("submitted: {}", result.getValue());
+            } else {
+                log.warn("error: {}", result.getResponse());
+            }
+        }
+
+    }
+
+
+    @Test
+    public void registerIssuanceScript() throws Exception {
+
+        var latestIssueContract = "5857010100323232323225333002323232323253330073370e900218041baa0011323370e6eb400d20c801300a300937540022940c024c02800cc020008c01c008c01c004c010dd50008a4c26cacae6955ceaab9e5742ae881";
+
+        var substandardIssueContract = PlutusBlueprintUtil.getPlutusScriptFromCompiledCode(latestIssueContract, PlutusVersion.v3);
+        log.info("substandardIssueContract: {}", substandardIssueContract.getPolicyId());
+
+        var substandardIssueAddress = AddressProvider.getRewardAddress(substandardIssueContract, network);
+        log.info("substandardIssueAddress: {}", substandardIssueAddress.getAddress());
+
+        var registerAddressTx = new Tx()
+                .from(adminAccount.baseAddress())
+                .registerStakeAddress(substandardIssueAddress.getAddress())
+                .withChangeAddress(adminAccount.baseAddress());
+
+        quickTxBuilder.compose(registerAddressTx)
+                .feePayer(adminAccount.baseAddress())
+                .withSigner(SignerProviders.signerFrom(adminAccount))
+                .completeAndWait();
+
 
     }
 

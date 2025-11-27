@@ -32,7 +32,7 @@ export default function Home() {
       title: "Deploy Protocol",
       description: "Initialize the CIP-113 protocol with custom validation logic and substandards",
       href: "/deploy",
-      available: true,
+      available: false,
     },
     {
       icon: <Coins className="h-8 w-8 text-accent-500" />,

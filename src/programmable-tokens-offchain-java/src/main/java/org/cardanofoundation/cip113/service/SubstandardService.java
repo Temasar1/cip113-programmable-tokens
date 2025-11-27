@@ -12,9 +12,11 @@ import org.springframework.core.io.support.PathMatchingResourcePatternResolver;
 import org.springframework.stereotype.Service;
 
 import java.io.IOException;
-import java.util.*;
+import java.util.ArrayList;
+import java.util.List;
+import java.util.Map;
+import java.util.Optional;
 import java.util.concurrent.ConcurrentHashMap;
-import java.util.stream.Collectors;
 
 @Service
 @Slf4j
@@ -108,4 +110,13 @@ public class SubstandardService {
     public Optional<Substandard> getSubstandardById(String id) {
         return Optional.ofNullable(substandardsCache.get(id));
     }
+
+    public Optional<SubstandardValidator> getSubstandardValidator(String id, String name) {
+        return getSubstandardById(id)
+                .flatMap(substandard -> substandard.validators()
+                        .stream()
+                        .filter(validator -> validator.title().contains(name))
+                        .findAny());
+    }
+
 }

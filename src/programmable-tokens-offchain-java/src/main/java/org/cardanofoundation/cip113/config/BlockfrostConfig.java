@@ -1,4 +1,4 @@
-package com.easy1staking.liqwidfinance.liquidation.bot.config;
+package org.cardanofoundation.cip113.config;
 
 import com.bloxbean.cardano.client.backend.blockfrost.service.BFBackendService;
 import lombok.extern.slf4j.Slf4j;

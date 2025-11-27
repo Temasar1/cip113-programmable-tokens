@@ -1,0 +1,84 @@
+/**
+ * API Types for CIP-113 Backend Integration
+ */
+
+// ============================================================================
+// Substandards
+// ============================================================================
+
+export interface SubstandardValidator {
+  title: string;
+  script_bytes: string;
+  script_hash: string;
+}
+
+export interface Substandard {
+  id: string;
+  validators: SubstandardValidator[];
+}
+
+export type SubstandardsResponse = Substandard[];
+
+// ============================================================================
+// Minting
+// ============================================================================
+
+export interface MintTokenRequest {
+  issuerBaseAddress: string;
+  substandardName: string;
+  substandardIssueContractName: string;
+  recipientAddress?: string;
+  assetName: string;      // HEX ENCODED token name
+  quantity: string;       // Amount as string to handle large numbers
+}
+
+// Backend returns plain text CBOR hex string (not JSON)
+export type MintTokenResponse = string;
+
+export interface MintFormData {
+  tokenName: string;           // Human-readable name (will be hex encoded)
+  quantity: string;            // Amount to mint
+  substandardId: string;       // Substandard ID (e.g., "dummy")
+  validatorTitle: string;      // Validator contract name
+  recipientAddress?: string;   // Optional recipient (defaults to issuer)
+}
+
+// ============================================================================
+// Protocol Blueprint
+// ============================================================================
+
+export interface ProtocolBlueprint {
+  validators: Array<{
+    title: string;
+    redeemer: unknown;
+    datum: unknown;
+    compiledCode: string;
+    hash: string;
+  }>;
+  preamble: {
+    title: string;
+    description: string;
+    version: string;
+  };
+}
+
+// ============================================================================
+// API Error
+// ============================================================================
+
+export interface ApiError {
+  message: string;
+  status?: number;
+  details?: unknown;
+}
+
+export class ApiException extends Error {
+  constructor(
+    message: string,
+    public status?: number,
+    public details?: unknown
+  ) {
+    super(message);
+    this.name = 'ApiException';
+  }
+}
