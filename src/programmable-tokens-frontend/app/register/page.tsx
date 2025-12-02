@@ -1,49 +1,63 @@
 "use client";
 
 import { useState } from 'react';
-import { useSearchParams } from 'next/navigation';
 import dynamic from 'next/dynamic';
 import { PageContainer } from '@/components/layout/page-container';
 import { Card, CardHeader, CardTitle, CardDescription, CardContent } from '@/components/ui/card';
-import { Badge } from '@/components/ui/badge';
 import { useSubstandards } from '@/hooks/use-substandards';
 
 // Dynamically import wallet-dependent components to prevent SSR
-const MintForm = dynamic(
-  () => import('@/components/mint/mint-form').then(mod => ({ default: mod.MintForm })),
+const RegistrationForm = dynamic(
+  () => import('@/components/register/registration-form').then(mod => ({ default: mod.RegistrationForm })),
   { ssr: false }
 );
 
-const TransactionPreview = dynamic(
-  () => import('@/components/mint/transaction-preview').then(mod => ({ default: mod.TransactionPreview })),
+const RegistrationPreview = dynamic(
+  () => import('@/components/register/registration-preview').then(mod => ({ default: mod.RegistrationPreview })),
   { ssr: false }
 );
 
-const MintSuccess = dynamic(
-  () => import('@/components/mint/mint-success').then(mod => ({ default: mod.MintSuccess })),
+const RegistrationSuccess = dynamic(
+  () => import('@/components/register/registration-success').then(mod => ({ default: mod.RegistrationSuccess })),
   { ssr: false }
 );
 
-type MintStep = 'form' | 'preview' | 'success';
+type RegistrationStep = 'form' | 'preview' | 'success';
 
 interface TransactionData {
-  unsignedTxCborHex: string;
-  assetName: string;
+  unsignedCborTx: string;
+  policyId: string;
+  substandardId: string;
+  issueContractName: string;
+  tokenName: string;
   quantity: string;
+  recipientAddress?: string;
 }
 
-export default function MintPage() {
-  const searchParams = useSearchParams();
-  const preSelectedSubstandard = searchParams.get('substandard');
-  const preSelectedIssueContract = searchParams.get('issueContract');
-
+export default function RegisterPage() {
   const { substandards, isLoading, error } = useSubstandards();
-  const [currentStep, setCurrentStep] = useState<MintStep>('form');
+  const [currentStep, setCurrentStep] = useState<RegistrationStep>('form');
   const [transactionData, setTransactionData] = useState<TransactionData | null>(null);
   const [txHash, setTxHash] = useState<string>('');
 
-  const handleTransactionBuilt = (unsignedTxCborHex: string, assetName: string, quantity: string) => {
-    setTransactionData({ unsignedTxCborHex, assetName, quantity });
+  const handleTransactionBuilt = (
+    unsignedCborTx: string,
+    policyId: string,
+    substandardId: string,
+    issueContractName: string,
+    tokenName: string,
+    quantity: string,
+    recipientAddress?: string
+  ) => {
+    setTransactionData({
+      unsignedCborTx,
+      policyId,
+      substandardId,
+      issueContractName,
+      tokenName,
+      quantity,
+      recipientAddress
+    });
     setCurrentStep('preview');
   };
 
@@ -57,30 +71,17 @@ export default function MintPage() {
     setCurrentStep('form');
   };
 
-  const handleMintAnother = () => {
-    setTransactionData(null);
-    setTxHash('');
-    setCurrentStep('form');
-  };
-
   return (
     <PageContainer>
       <div className="max-w-2xl mx-auto">
         {/* Page Header */}
         <div className="mb-8">
           <h1 className="text-3xl font-bold text-white mb-2">
-            Mint Programmable Token
+            Register Programmable Token
           </h1>
           <p className="text-dark-300">
-            Create new CIP-113 tokens with embedded validation logic
+            Register a new CIP-113 token policy with validation logic on-chain
           </p>
-          {preSelectedSubstandard && preSelectedIssueContract && (
-            <div className="mt-4 p-3 bg-primary-500/10 border border-primary-500/20 rounded-lg">
-              <p className="text-sm text-primary-300">
-                <strong>Using registered policy:</strong> {preSelectedSubstandard} / {preSelectedIssueContract}
-              </p>
-            </div>
-          )}
         </div>
 
         {/* Loading State */}
@@ -114,17 +115,15 @@ export default function MintPage() {
         {!isLoading && !error && currentStep === 'form' && (
           <Card>
             <CardHeader>
-              <CardTitle>Token Details</CardTitle>
+              <CardTitle>Token Policy Details</CardTitle>
               <CardDescription>
-                Enter the details for your new token
+                Select the validation logic and contracts for your token
               </CardDescription>
             </CardHeader>
             <CardContent>
-              <MintForm
+              <RegistrationForm
                 substandards={substandards}
                 onTransactionBuilt={handleTransactionBuilt}
-                preSelectedSubstandard={preSelectedSubstandard || undefined}
-                preSelectedIssueContract={preSelectedIssueContract || undefined}
               />
             </CardContent>
           </Card>
@@ -132,10 +131,12 @@ export default function MintPage() {
 
         {/* Preview Step */}
         {currentStep === 'preview' && transactionData && (
-          <TransactionPreview
-            unsignedTxCborHex={transactionData.unsignedTxCborHex}
-            assetName={transactionData.assetName}
+          <RegistrationPreview
+            unsignedCborTx={transactionData.unsignedCborTx}
+            policyId={transactionData.policyId}
+            tokenName={transactionData.tokenName}
             quantity={transactionData.quantity}
+            recipientAddress={transactionData.recipientAddress}
             onSuccess={handleTransactionSuccess}
             onCancel={handleCancelPreview}
           />
@@ -143,11 +144,13 @@ export default function MintPage() {
 
         {/* Success Step */}
         {currentStep === 'success' && transactionData && (
-          <MintSuccess
+          <RegistrationSuccess
             txHash={txHash}
-            assetName={transactionData.assetName}
+            policyId={transactionData.policyId}
+            substandardId={transactionData.substandardId}
+            issueContractName={transactionData.issueContractName}
+            tokenName={transactionData.tokenName}
             quantity={transactionData.quantity}
-            onMintAnother={handleMintAnother}
           />
         )}
       </div>

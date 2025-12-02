@@ -6,7 +6,7 @@ import { PageContainer } from "@/components/layout";
 import { Card, CardHeader, CardTitle, CardDescription, CardContent } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
-import { Coins, Send, Shield, BarChart3, Rocket } from "lucide-react";
+import { Coins, Send, Shield, BarChart3, Rocket, FileCheck } from "lucide-react";
 
 const WalletInfoDynamic = dynamic(
   () => import("@/components/wallet").then((mod) => ({ default: mod.WalletInfo })),
@@ -28,11 +28,11 @@ export default function Home() {
 
   const features = [
     {
-      icon: <Rocket className="h-8 w-8 text-primary-500" />,
-      title: "Deploy Protocol",
-      description: "Initialize the CIP-113 protocol with custom validation logic and substandards",
-      href: "/deploy",
-      available: false,
+      icon: <FileCheck className="h-8 w-8 text-primary-500" />,
+      title: "Register Token",
+      description: "Register a new programmable token policy with validation logic on-chain",
+      href: "/register",
+      available: true,
     },
     {
       icon: <Coins className="h-8 w-8 text-accent-500" />,
@@ -144,9 +144,9 @@ export default function Home() {
                   2
                 </div>
                 <div>
-                  <h3 className="font-semibold text-white">Deploy the Protocol</h3>
+                  <h3 className="font-semibold text-white">Register Your Token</h3>
                   <p className="text-sm text-dark-300 mt-1">
-                    Initialize the CIP-113 protocol with your chosen validation logic
+                    Register a new programmable token policy with your chosen validation logic
                   </p>
                 </div>
               </li>
@@ -155,9 +155,20 @@ export default function Home() {
                   3
                 </div>
                 <div>
-                  <h3 className="font-semibold text-white">Mint and Transfer</h3>
+                  <h3 className="font-semibold text-white">Mint Tokens</h3>
                   <p className="text-sm text-dark-300 mt-1">
-                    Create programmable tokens and transfer them with automatic validation
+                    Create tokens using your registered policy with embedded validation rules
+                  </p>
+                </div>
+              </li>
+              <li className="flex gap-4">
+                <div className="flex-shrink-0 w-8 h-8 rounded-full bg-primary-500/10 text-primary-500 flex items-center justify-center font-bold">
+                  4
+                </div>
+                <div>
+                  <h3 className="font-semibold text-white">Transfer and Manage</h3>
+                  <p className="text-sm text-dark-300 mt-1">
+                    Transfer tokens with automatic validation and manage your portfolio
                   </p>
                 </div>
               </li>

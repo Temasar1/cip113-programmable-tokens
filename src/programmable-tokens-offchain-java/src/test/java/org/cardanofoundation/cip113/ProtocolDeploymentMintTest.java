@@ -71,7 +71,25 @@ public class ProtocolDeploymentMintTest extends AbstractPreviewTest {
 
         var utxosOpt = bfBackendService.getUtxoService().getUtxos(adminAccount.baseAddress(), 100, 1);
         if (!utxosOpt.isSuccessful() || utxosOpt.getValue().size() < 3) {
-            Assertions.fail("no(t enough) utxos available");
+            log.warn("not enough utxos, splitting wallet");
+
+            var splitTx = new Tx()
+                    .from(adminAccount.baseAddress())
+                    .payToAddress(adminAccount.baseAddress(), Amount.ada(5))
+                    .payToAddress(adminAccount.baseAddress(), Amount.ada(5))
+                    .payToAddress(adminAccount.baseAddress(), Amount.ada(5))
+                    .withChangeAddress(adminAccount.baseAddress());
+
+            var response = quickTxBuilder.compose(splitTx)
+                    .withSigner(SignerProviders.signerFrom(adminAccount))
+                    .mergeOutputs(false)
+                    .completeAndWait();
+
+            log.info("Completed: {}", response);
+
+            Thread.sleep(30000L);
+
+            utxosOpt = bfBackendService.getUtxoService().getUtxos(adminAccount.baseAddress(), 100, 1);
         }
         var allWalletUtxos = utxosOpt.getValue();
         var walletUtxos = utxosOpt.getValue().stream().limit(2).toList();
