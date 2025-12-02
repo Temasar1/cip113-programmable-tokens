@@ -83,6 +83,19 @@ export interface ProtocolBlueprint {
 }
 
 // ============================================================================
+// Protocol Version
+// ============================================================================
+
+export interface ProtocolVersionInfo {
+  registryNodePolicyId: string;
+  progLogicScriptHash: string;
+  txHash: string;
+  slot: number;
+  timestamp: number; // Unix timestamp in seconds (convert to ms for JS Date)
+  default: boolean; // Jackson serializes isDefault as "default"
+}
+
+// ============================================================================
 // Balance
 // ============================================================================
 

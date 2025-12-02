@@ -24,7 +24,10 @@ export function hexToString(hex: string): string {
  * Mint tokens via backend API
  * Returns unsigned transaction CBOR hex
  */
-export async function mintToken(request: MintTokenRequest): Promise<MintTokenResponse> {
+export async function mintToken(
+  request: MintTokenRequest,
+  protocolTxHash?: string
+): Promise<MintTokenResponse> {
   // Ensure assetName is hex encoded
   const hexEncodedRequest = {
     ...request,
@@ -33,8 +36,12 @@ export async function mintToken(request: MintTokenRequest): Promise<MintTokenRes
       : request.assetName,
   };
 
+  const endpoint = protocolTxHash
+    ? `/issue-token/mint?protocolTxHash=${protocolTxHash}`
+    : '/issue-token/mint';
+
   return apiPost<MintTokenRequest, MintTokenResponse>(
-    '/issue-token/mint',
+    endpoint,
     hexEncodedRequest,
     { timeout: 60000 } // 60 seconds for minting transaction
   );

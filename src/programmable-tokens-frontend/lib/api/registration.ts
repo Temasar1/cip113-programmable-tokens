@@ -10,10 +10,15 @@ import { apiPost } from './client';
  * Returns policy ID and unsigned transaction CBOR hex
  */
 export async function registerToken(
-  request: RegisterTokenRequest
+  request: RegisterTokenRequest,
+  protocolTxHash?: string
 ): Promise<RegisterTokenResponse> {
+  const endpoint = protocolTxHash
+    ? `/issue-token/register?protocolTxHash=${protocolTxHash}`
+    : '/issue-token/register';
+
   return apiPost<RegisterTokenRequest, RegisterTokenResponse>(
-    '/issue-token/register',
+    endpoint,
     request,
     { timeout: 60000 } // 60 seconds for registration transaction
   );

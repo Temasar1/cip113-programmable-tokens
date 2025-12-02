@@ -10,10 +10,12 @@ import { truncateAddress, formatADAWithSymbol, getNetworkDisplayName } from "@/l
 import { useToast } from "@/components/ui/toast";
 import { getWalletBalance, parseWalletBalance } from "@/lib/api";
 import { ParsedBalance } from "@/types/api";
+import { useProtocolVersion } from "@/contexts/protocol-version-context";
 
 export function WalletInfo() {
   const { connected, wallet, disconnect } = useWallet();
   const { toast } = useToast();
+  const { selectedVersion } = useProtocolVersion();
   const [address, setAddress] = useState<string>("");
   const [balance, setBalance] = useState<string>("0");
   const [programmableBalance, setProgrammableBalance] = useState<ParsedBalance | null>(null);
@@ -26,7 +28,10 @@ export function WalletInfo() {
   const loadProgrammableBalances = async (walletAddress: string) => {
     try {
       setIsLoadingProgrammable(true);
-      const response = await getWalletBalance(walletAddress);
+      const response = await getWalletBalance(
+        walletAddress,
+        selectedVersion?.txHash
+      );
       const parsed = await parseWalletBalance(response);
       setProgrammableBalance(parsed);
     } catch (error) {
@@ -71,7 +76,16 @@ export function WalletInfo() {
     }
 
     loadWalletInfo();
+    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [connected, wallet, toast]);
+
+  // Reload programmable balances when protocol version changes
+  useEffect(() => {
+    if (address && selectedVersion) {
+      loadProgrammableBalances(address);
+    }
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [selectedVersion?.txHash]);
 
   const handleCopyAddress = async () => {
     try {

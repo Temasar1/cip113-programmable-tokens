@@ -87,9 +87,9 @@ export function getNetworkDisplayName(network: string): string {
  */
 export function getNetworkColor(network: string): string {
   const colors: Record<string, string> = {
-    preview: "bg-blue-500",
-    preprod: "bg-yellow-500",
-    mainnet: "bg-green-500",
+    preview: "bg-primary-500",     // Blue/purple for preview
+    preprod: "bg-accent-500",      // Orange for preprod
+    mainnet: "bg-green-500",       // Green for mainnet
   };
-  return colors[network.toLowerCase()] || "bg-gray-500";
+  return colors[network.toLowerCase()] || "bg-dark-500";
 }

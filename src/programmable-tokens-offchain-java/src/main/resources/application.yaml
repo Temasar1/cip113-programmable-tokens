@@ -73,6 +73,8 @@ network: preview
 wallet:
   mnemonic: ""
 
+programmable.token.default.txHash: "114adc8ee212b5ded1f895ab53c7741e5521feff735d05aeef2a92dcf05c9ae2"
+
 blockfrost:
   url: https://cardano-preview.blockfrost.io/api/v0/
 

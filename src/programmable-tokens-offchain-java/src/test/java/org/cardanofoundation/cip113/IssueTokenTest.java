@@ -45,7 +45,7 @@ public class IssueTokenTest extends AbstractPreviewTest {
 
     @BeforeEach
     public void loadContracts() throws Exception {
-        protocolBootstrapParams = OBJECT_MAPPER.readValue(this.getClass().getClassLoader().getResourceAsStream("protocolBootstrap.json"), ProtocolBootstrapParams.class);
+        protocolBootstrapParams = OBJECT_MAPPER.readValue(this.getClass().getClassLoader().getResourceAsStream("protocol-bootstraps-preview.json"), ProtocolBootstrapParams.class);
         var plutus = OBJECT_MAPPER.readValue(this.getClass().getClassLoader().getResourceAsStream("plutus.json"), Plutus.class);
         var validators = plutus.validators();
         ISSUANCE_MINT = getCompiledCodeFor("issuance_mint.issuance_mint.mint", validators);

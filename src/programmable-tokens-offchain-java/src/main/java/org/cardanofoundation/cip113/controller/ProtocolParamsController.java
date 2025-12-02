@@ -3,11 +3,17 @@ package org.cardanofoundation.cip113.controller;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
 import org.cardanofoundation.cip113.entity.ProtocolParamsEntity;
+import org.cardanofoundation.cip113.model.ProtocolVersionInfo;
+import org.cardanofoundation.cip113.service.ProtocolBootstrapService;
 import org.cardanofoundation.cip113.service.ProtocolParamsService;
+import org.cardanofoundation.conversions.CardanoConverters;
 import org.springframework.http.ResponseEntity;
 import org.springframework.web.bind.annotation.*;
 
+import java.time.LocalDateTime;
+import java.time.ZoneOffset;
 import java.util.List;
+import java.util.stream.Collectors;
 
 @RestController
 @RequestMapping("${apiPrefix}/protocol-params")
@@ -16,6 +22,10 @@ import java.util.List;
 public class ProtocolParamsController {
 
     private final ProtocolParamsService protocolParamsService;
+
+    private final ProtocolBootstrapService protocolBootstrapService;
+
+    private final CardanoConverters cardanoConverters;
 
     /**
      * Get the latest protocol params version
@@ -82,5 +92,50 @@ public class ProtocolParamsController {
         return protocolParamsService.getValidAtSlot(slot)
                 .map(ResponseEntity::ok)
                 .orElse(ResponseEntity.notFound().build());
+    }
+
+    /**
+     * Get all protocol versions with default marked
+     * Returns list of all protocol versions with essential fields for UI display
+     * The default version is marked based on txHash from protocol-bootstraps-preview.json
+     *
+     * @return list of protocol version info ordered by slot descending (newest first)
+     */
+    @GetMapping("/versions")
+    public ResponseEntity<List<ProtocolVersionInfo>> getVersions() {
+        log.debug("GET /versions - fetching all protocol versions");
+
+        try {
+            // Get default txHash from protocol-bootstraps-preview.json
+            String defaultTxHash = protocolBootstrapService.getProtocolBootstrapParams().txHash();
+            log.debug("Default protocol version txHash: {}", defaultTxHash);
+
+            // Get all protocol params (already ordered by slot ascending)
+            List<ProtocolParamsEntity> allParams = protocolParamsService.getAll();
+
+            // Convert to DTOs with isDefault flag and timestamp conversion
+            List<ProtocolVersionInfo> versions = allParams.stream()
+                    .map(entity -> {
+                        var timestamp = cardanoConverters.slot()
+                                .slotToTime(entity.getSlot())
+                                .toEpochSecond(ZoneOffset.UTC);
+                        return ProtocolVersionInfo.builder()
+                                .registryNodePolicyId(entity.getRegistryNodePolicyId())
+                                .progLogicScriptHash(entity.getProgLogicScriptHash())
+                                .txHash(entity.getTxHash())
+                                .slot(entity.getSlot())
+                                .timestamp(timestamp)
+                                .isDefault(entity.getTxHash().equals(defaultTxHash))
+                                .build();
+                    })
+                    .collect(Collectors.toList());
+
+            log.debug("Returning {} protocol versions", versions.size());
+            return ResponseEntity.ok(versions);
+
+        } catch (Exception e) {
+            log.error("Error fetching protocol versions", e);
+            return ResponseEntity.internalServerError().build();
+        }
     }
 }

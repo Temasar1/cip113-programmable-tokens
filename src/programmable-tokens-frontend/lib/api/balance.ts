@@ -10,10 +10,15 @@ import { WalletBalanceResponse, ParsedBalance, ParsedAsset } from '@/types/api';
  * Get comprehensive wallet balance including all programmable token addresses
  *
  * @param address - User's wallet address (bech32)
+ * @param protocolTxHash - Optional protocol version tx hash to filter balances
  * @returns WalletBalanceResponse with merged balances from all programmable token addresses
  */
-export async function getWalletBalance(address: string): Promise<WalletBalanceResponse> {
-  return apiGet<WalletBalanceResponse>(`/balances/wallet-balance/${address}`);
+export async function getWalletBalance(
+  address: string,
+  protocolTxHash?: string
+): Promise<WalletBalanceResponse> {
+  const params = protocolTxHash ? `?protocolTxHash=${protocolTxHash}` : '';
+  return apiGet<WalletBalanceResponse>(`/balances/wallet-balance/${address}${params}`);
 }
 
 /**

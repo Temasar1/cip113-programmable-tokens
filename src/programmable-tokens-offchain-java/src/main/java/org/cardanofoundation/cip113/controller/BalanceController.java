@@ -5,8 +5,10 @@ import com.easy1staking.cardano.model.AssetType;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
 import org.cardanofoundation.cip113.entity.BalanceLogEntity;
+import org.cardanofoundation.cip113.entity.ProtocolParamsEntity;
 import org.cardanofoundation.cip113.model.WalletBalanceResponse;
 import org.cardanofoundation.cip113.service.BalanceService;
+import org.cardanofoundation.cip113.service.ProtocolParamsService;
 import org.cardanofoundation.cip113.service.RegistryService;
 import org.cardanofoundation.cip113.util.AddressUtil;
 import org.cardanofoundation.cip113.util.BalanceValueHelper;
@@ -25,6 +27,7 @@ import java.util.stream.Stream;
 public class BalanceController {
 
     private final BalanceService balanceService;
+    private final ProtocolParamsService protocolParamsService;
     private final RegistryService registryService;
 
     /**
@@ -238,13 +241,18 @@ public class BalanceController {
      *    (in programmable tokens, either credential can be used as stake component)
      * 3. Returns all balances (programmable + non-programmable tokens) in those addresses
      * 4. Merges results from multiple addresses controlled by the wallet
+     * 5. Optionally filters by protocol version if protocolTxHash is provided
      *
      * @param address the bech32 wallet address
+     * @param protocolTxHash optional protocol version tx hash to filter balances
      * @return merged balances from all programmable token addresses, or empty if none found
      */
     @GetMapping("/wallet-balance/{address}")
-    public ResponseEntity<WalletBalanceResponse> getWalletBalance(@PathVariable String address) {
-        log.debug("GET /wallet-balance/{} - fetching comprehensive wallet balance", address);
+    public ResponseEntity<WalletBalanceResponse> getWalletBalance(
+            @PathVariable String address,
+            @RequestParam(required = false) String protocolTxHash) {
+        log.debug("GET /wallet-balance/{} - fetching comprehensive wallet balance (protocol: {})",
+                  address, protocolTxHash != null ? protocolTxHash : "all versions");
 
         try {
             // Parse wallet address to extract payment and stake credentials
@@ -289,12 +297,33 @@ public class BalanceController {
 
             log.debug("Merged result: {} unique programmable token addresses", mergedBalances.size());
 
+            // Filter by protocol version if protocolTxHash is provided
+            List<BalanceLogEntity> filteredBalances;
+            if (protocolTxHash != null && !protocolTxHash.isEmpty()) {
+                Optional<ProtocolParamsEntity> protocolOpt = protocolParamsService.getByTxHash(protocolTxHash);
+                if (protocolOpt.isEmpty()) {
+                    log.warn("Invalid protocol txHash: {}", protocolTxHash);
+                    return ResponseEntity.badRequest().build();
+                }
+
+                String progLogicScriptHash = protocolOpt.get().getProgLogicScriptHash();
+                log.debug("Filtering balances by progLogicScriptHash: {}", progLogicScriptHash);
+
+                filteredBalances = mergedBalances.stream()
+                        .filter(balance -> progLogicScriptHash.equals(balance.getPaymentScriptHash()))
+                        .collect(Collectors.toList());
+
+                log.debug("After protocol filtering: {} addresses match", filteredBalances.size());
+            } else {
+                filteredBalances = mergedBalances;
+            }
+
             // Build response
             WalletBalanceResponse response = WalletBalanceResponse.builder()
                     .walletAddress(address)
                     .paymentHash(paymentHash)
                     .stakeHash(stakeHash)
-                    .balances(mergedBalances)
+                    .balances(filteredBalances)
                     .build();
 
             return ResponseEntity.ok(response);

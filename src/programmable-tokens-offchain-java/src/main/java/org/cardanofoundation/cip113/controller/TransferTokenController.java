@@ -25,6 +25,7 @@ import org.springframework.http.ResponseEntity;
 import org.springframework.web.bind.annotation.PostMapping;
 import org.springframework.web.bind.annotation.RequestBody;
 import org.springframework.web.bind.annotation.RequestMapping;
+import org.springframework.web.bind.annotation.RequestParam;
 import org.springframework.web.bind.annotation.RestController;
 
 import java.util.Collection;
@@ -50,15 +51,20 @@ public class TransferTokenController {
     private final QuickTxBuilder quickTxBuilder;
 
     @PostMapping("/transfer")
-    public ResponseEntity<?> transfer(@RequestBody TransferTokenRequest transferTokenRequest) {
-        log.info("transferTokenRequest: {}", transferTokenRequest);
+    public ResponseEntity<?> transfer(
+            @RequestBody TransferTokenRequest transferTokenRequest,
+            @RequestParam(required = false) String protocolTxHash) {
+        log.info("transferTokenRequest: {}, protocolTxHash: {}", transferTokenRequest, protocolTxHash);
 
         var assetType = AssetType.fromUnit(transferTokenRequest.unit());
         log.info("prog token to transfer: {}.{}", assetType.policyId(), assetType.unsafeHumanAssetName());
 
         try {
 
-            var protocolBootstrapParams = protocolBootstrapService.getProtocolBootstrapParams();
+            var protocolBootstrapParams = protocolTxHash != null && !protocolTxHash.isEmpty()
+                    ? protocolBootstrapService.getProtocolBootstrapParamsByTxHash(protocolTxHash)
+                            .orElseThrow(() -> new IllegalArgumentException("Protocol version not found: " + protocolTxHash))
+                    : protocolBootstrapService.getProtocolBootstrapParams();
 
             var protocolParamsScriptHash = protocolBootstrapParams.protocolParams().scriptHash();
 

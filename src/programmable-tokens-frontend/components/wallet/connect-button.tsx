@@ -1,24 +1,58 @@
 "use client";
 
-import { useState } from "react";
+import { useState, useEffect } from "react";
 import { useWallet } from "@meshsdk/react";
 import { Button } from "@/components/ui/button";
 import { Card, CardHeader, CardTitle, CardContent } from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
-import { X } from "lucide-react";
+import { X, Wallet } from "lucide-react";
 import { cn } from "@/lib/utils";
 
-const SUPPORTED_WALLETS = [
-  { id: "nami", name: "Nami", icon: "🦎" },
-  { id: "eternl", name: "Eternl", icon: "♾️" },
-  { id: "lace", name: "Lace", icon: "🎀" },
-  { id: "flint", name: "Flint", icon: "🔥" },
-];
+interface InstalledWallet {
+  id: string;
+  name: string;
+  icon: string;
+}
 
 export function ConnectButton() {
   const { connect, connected, name } = useWallet();
   const [showModal, setShowModal] = useState(false);
   const [isConnecting, setIsConnecting] = useState(false);
+  const [installedWallets, setInstalledWallets] = useState<InstalledWallet[]>([]);
+
+  // Detect installed wallets using CIP-30
+  useEffect(() => {
+    if (typeof window === 'undefined') return;
+
+    const detectWallets = () => {
+      const wallets: InstalledWallet[] = [];
+
+      if (typeof window.cardano !== 'undefined' && window.cardano) {
+        // Iterate through all properties in window.cardano
+        Object.keys(window.cardano).forEach((key) => {
+          const wallet = window.cardano?.[key];
+          // Check if it's a valid CIP-30 wallet (has name and icon)
+          if (wallet && typeof wallet === 'object' && wallet.name && wallet.icon) {
+            wallets.push({
+              id: key,
+              name: wallet.name,
+              icon: wallet.icon
+            });
+          }
+        });
+      }
+
+      setInstalledWallets(wallets);
+    };
+
+    // Detect immediately
+    detectWallets();
+
+    // Also detect after a short delay (some wallets load asynchronously)
+    const timeoutId = setTimeout(detectWallets, 500);
+
+    return () => clearTimeout(timeoutId);
+  }, []);
 
   const handleConnect = async (walletId: string) => {
     setIsConnecting(true);
@@ -42,55 +76,90 @@ export function ConnectButton() {
   }
 
   return (
-    <>
+    <div className="relative">
       <Button onClick={() => setShowModal(true)} variant="primary" size="md">
+        <Wallet className="h-4 w-4 mr-2" />
         Connect Wallet
       </Button>
 
       {showModal && (
-        <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-black/80 backdrop-blur-sm animate-in fade-in">
-          <Card className="w-full max-w-md">
-            <CardHeader className="flex flex-row items-center justify-between">
-              <CardTitle>Connect Wallet</CardTitle>
+        <>
+          {/* Backdrop */}
+          <div
+            className="fixed inset-0 z-40"
+            onClick={() => setShowModal(false)}
+          />
+
+          {/* Dropdown */}
+          <Card className="absolute top-full right-0 mt-2 w-80 z-50 shadow-xl">
+            <CardHeader className="flex flex-row items-center justify-between pb-3">
+              <CardTitle className="text-base">Connect Wallet</CardTitle>
               <button
                 onClick={() => setShowModal(false)}
                 className="text-dark-400 hover:text-white transition-colors"
               >
-                <X className="h-5 w-5" />
+                <X className="h-4 w-4" />
               </button>
             </CardHeader>
-            <CardContent className="space-y-3">
-              <p className="text-sm text-dark-300 mb-4">
-                Select a wallet to connect to the CIP-113 Programmable Tokens application
-              </p>
-              {SUPPORTED_WALLETS.map((wallet) => (
-                <button
-                  key={wallet.id}
-                  onClick={() => handleConnect(wallet.id)}
-                  disabled={isConnecting}
-                  className={cn(
-                    "w-full flex items-center gap-3 p-4 rounded-lg border border-dark-700",
-                    "bg-dark-800 hover:bg-dark-700 hover:border-primary-500",
-                    "transition-all duration-200",
-                    "disabled:opacity-50 disabled:cursor-not-allowed"
-                  )}
-                >
-                  <span className="text-3xl">{wallet.icon}</span>
-                  <span className="text-white font-medium">{wallet.name}</span>
-                  {isConnecting && (
-                    <div className="ml-auto">
-                      <div className="h-4 w-4 border-2 border-primary-500 border-t-transparent rounded-full animate-spin" />
-                    </div>
-                  )}
-                </button>
-              ))}
-              <p className="text-xs text-dark-400 mt-4 text-center">
-                Make sure your wallet extension is installed and unlocked
-              </p>
+            <CardContent className="space-y-2">
+              {installedWallets.length === 0 ? (
+                <div className="text-center py-8">
+                  <Wallet className="h-12 w-12 text-dark-600 mx-auto mb-3" />
+                  <p className="text-sm text-dark-300 mb-2">
+                    No wallets detected
+                  </p>
+                  <p className="text-xs text-dark-400">
+                    Please install a Cardano wallet extension
+                  </p>
+                </div>
+              ) : (
+                <>
+                  <p className="text-xs text-dark-400 mb-3">
+                    Select a wallet to connect
+                  </p>
+                  {installedWallets.map((wallet) => (
+                    <button
+                      key={wallet.id}
+                      onClick={() => handleConnect(wallet.id)}
+                      disabled={isConnecting}
+                      className={cn(
+                        "w-full flex items-center gap-3 p-3 rounded-lg border border-dark-700",
+                        "bg-dark-800 hover:bg-dark-700 hover:border-primary-500",
+                        "transition-all duration-200",
+                        "disabled:opacity-50 disabled:cursor-not-allowed"
+                      )}
+                    >
+                      {/* Wallet Icon */}
+                      <div className="w-8 h-8 rounded-lg overflow-hidden flex-shrink-0 bg-dark-900">
+                        {wallet.icon ? (
+                          // eslint-disable-next-line @next/next/no-img-element
+                          <img
+                            src={wallet.icon}
+                            alt={`${wallet.name} icon`}
+                            className="w-full h-full object-cover"
+                          />
+                        ) : (
+                          <div className="w-full h-full flex items-center justify-center">
+                            <Wallet className="h-4 w-4 text-dark-500" />
+                          </div>
+                        )}
+                      </div>
+
+                      {/* Wallet Name */}
+                      <span className="text-white font-medium flex-1 text-left">{wallet.name}</span>
+
+                      {/* Loading Spinner */}
+                      {isConnecting && (
+                        <div className="h-4 w-4 border-2 border-primary-500 border-t-transparent rounded-full animate-spin" />
+                      )}
+                    </button>
+                  ))}
+                </>
+              )}
             </CardContent>
           </Card>
-        </div>
+        </>
       )}
-    </>
+    </div>
   );
 }

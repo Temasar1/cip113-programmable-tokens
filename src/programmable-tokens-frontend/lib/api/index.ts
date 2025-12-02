@@ -3,3 +3,4 @@ export * from './substandards';
 export * from './registration';
 export * from './minting';
 export * from './balance';
+export * from './protocol-versions';
