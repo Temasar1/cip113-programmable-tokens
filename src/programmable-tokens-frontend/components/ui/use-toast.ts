@@ -1,6 +1,6 @@
 "use client";
 
-import { useState, useCallback } from "react";
+import { useState, useCallback, useEffect } from "react";
 
 export type ToastVariant = "default" | "success" | "error" | "warning" | "info";
 
@@ -29,7 +29,7 @@ function dispatch(action: { type: string; toast?: Toast; toastId?: string }) {
       duration: action.toast!.duration ?? 5000,
     };
 
-    memoryState.toasts = [...memoryState.toasts, toast];
+    memoryState = { toasts: [...memoryState.toasts, toast] };
 
     if (toast.duration !== Infinity) {
       setTimeout(() => {
@@ -37,9 +37,9 @@ function dispatch(action: { type: string; toast?: Toast; toastId?: string }) {
       }, toast.duration);
     }
   } else if (action.type === "DISMISS_TOAST") {
-    memoryState.toasts = memoryState.toasts.filter((t) => t.id !== action.toastId);
+    memoryState = { toasts: memoryState.toasts.filter((t) => t.id !== action.toastId) };
   } else if (action.type === "REMOVE_TOAST") {
-    memoryState.toasts = memoryState.toasts.filter((t) => t.id !== action.toastId);
+    memoryState = { toasts: memoryState.toasts.filter((t) => t.id !== action.toastId) };
   }
 
   listeners.forEach((listener) => listener(memoryState));
@@ -48,12 +48,12 @@ function dispatch(action: { type: string; toast?: Toast; toastId?: string }) {
 export function useToast() {
   const [state, setState] = useState<ToastState>(memoryState);
 
-  useState(() => {
+  useEffect(() => {
     listeners.add(setState);
     return () => {
       listeners.delete(setState);
     };
-  });
+  }, []);
 
   const toast = useCallback(
     (props: Omit<Toast, "id">) => {

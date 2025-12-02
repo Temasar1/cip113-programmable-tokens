@@ -155,12 +155,37 @@ export function RegistrationForm({
         recipientAddress.trim() || undefined
       );
     } catch (error) {
-      console.error('Error building transaction:', error);
+      // Extract error message from backend response
+      let errorMessage = 'Failed to build registration transaction';
+      let errorTitle = 'Registration Failed';
+
+      if (error instanceof Error) {
+        errorMessage = error.message;
+
+        // Check if this is a "policy already registered" error
+        if (errorMessage.toLowerCase().includes('already registered')) {
+          errorTitle = 'Token Already Registered';
+          // Extract policy ID if present in message
+          const policyMatch = errorMessage.match(/policy\s+(\w+)\s+already/i);
+          if (policyMatch) {
+            const policyId = policyMatch[1];
+            errorMessage = `Token policy ${policyId.substring(0, 16)}... has already been registered. Each policy can only be registered once.`;
+          } else {
+            errorMessage = 'This token policy has already been registered. Each policy can only be registered once.';
+          }
+        }
+      }
+
+      // Show toast notification
       showToast({
-        title: 'Registration Failed',
-        description: error instanceof Error ? error.message : 'Failed to build registration transaction',
+        title: errorTitle,
+        description: errorMessage,
         variant: 'error',
+        duration: 6000, // Show for 6 seconds
       });
+
+      // Log to console without showing Next.js error overlay
+      console.log('Registration error:', { errorTitle, errorMessage });
     } finally {
       setIsBuilding(false);
     }
