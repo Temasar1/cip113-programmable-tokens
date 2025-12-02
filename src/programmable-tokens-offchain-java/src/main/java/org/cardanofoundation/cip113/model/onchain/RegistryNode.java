@@ -19,9 +19,9 @@ public record RegistryNode(String key,
             return ConstrPlutusData.of(0,
                     BytesPlutusData.of(""),
                     BytesPlutusData.of(HexUtil.decodeHexString(next)),
-                    ConstrPlutusData.of(0, BytesPlutusData.of(""),
-                    ConstrPlutusData.of(0, BytesPlutusData.of(""),
-                    BytesPlutusData.of(""))));
+                    ConstrPlutusData.of(0, BytesPlutusData.of("")),
+                    ConstrPlutusData.of(0, BytesPlutusData.of("")),
+                    BytesPlutusData.of(""));
         } else {
             return ConstrPlutusData.of(0,
                     BytesPlutusData.of(HexUtil.decodeHexString(key)),
