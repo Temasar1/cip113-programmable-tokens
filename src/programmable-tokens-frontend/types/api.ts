@@ -83,6 +83,44 @@ export interface ProtocolBlueprint {
 }
 
 // ============================================================================
+// Balance
+// ============================================================================
+
+export interface BalanceLogEntity {
+  id: number;
+  address: string;
+  paymentScriptHash: string;
+  stakeKeyHash: string | null;
+  txHash: string;
+  slot: number;
+  blockHeight: number;
+  balance: string; // JSON string: {"lovelace": "1000000", "unit": "amount"}
+  createdAt: string;
+}
+
+export interface WalletBalanceResponse {
+  walletAddress: string;
+  paymentHash: string;
+  stakeHash: string | null;
+  balances: BalanceLogEntity[];
+}
+
+// Parsed balance entry for UI
+export interface ParsedBalance {
+  lovelace: string;
+  assets: ParsedAsset[];
+}
+
+export interface ParsedAsset {
+  unit: string;           // Full unit (policyId + assetName hex)
+  policyId: string;       // Policy ID (56 chars)
+  assetNameHex: string;   // Asset name in hex
+  assetName: string;      // Decoded asset name (UTF-8, or hex if decode fails)
+  amount: string;         // Amount as string
+  isProgrammable: boolean; // Whether this is a registered programmable token
+}
+
+// ============================================================================
 // API Error
 // ============================================================================
 

@@ -5,17 +5,18 @@ import com.easy1staking.cardano.model.AssetType;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
 import org.cardanofoundation.cip113.entity.BalanceLogEntity;
+import org.cardanofoundation.cip113.model.WalletBalanceResponse;
 import org.cardanofoundation.cip113.service.BalanceService;
 import org.cardanofoundation.cip113.service.RegistryService;
+import org.cardanofoundation.cip113.util.AddressUtil;
 import org.cardanofoundation.cip113.util.BalanceValueHelper;
 import org.springframework.http.ResponseEntity;
 import org.springframework.web.bind.annotation.*;
 
 import java.math.BigInteger;
-import java.util.HashMap;
-import java.util.List;
-import java.util.Map;
+import java.util.*;
 import java.util.stream.Collectors;
+import java.util.stream.Stream;
 
 @RestController
 @RequestMapping("${apiPrefix}/balances")
@@ -226,5 +227,81 @@ public class BalanceController {
                 .collect(Collectors.toMap(Map.Entry::getKey, Map.Entry::getValue));
 
         return ResponseEntity.ok(programmableBalances);
+    }
+
+    /**
+     * Get comprehensive wallet balance for a user's wallet address
+     *
+     * This endpoint:
+     * 1. Extracts payment and stake credentials from the wallet address
+     * 2. Queries programmable token addresses using both credentials as "stake keys"
+     *    (in programmable tokens, either credential can be used as stake component)
+     * 3. Returns all balances (programmable + non-programmable tokens) in those addresses
+     * 4. Merges results from multiple addresses controlled by the wallet
+     *
+     * @param address the bech32 wallet address
+     * @return merged balances from all programmable token addresses, or empty if none found
+     */
+    @GetMapping("/wallet-balance/{address}")
+    public ResponseEntity<WalletBalanceResponse> getWalletBalance(@PathVariable String address) {
+        log.debug("GET /wallet-balance/{} - fetching comprehensive wallet balance", address);
+
+        try {
+            // Parse wallet address to extract payment and stake credentials
+            AddressUtil.AddressComponents components = AddressUtil.decompose(address);
+
+            if (components == null) {
+                log.warn("Failed to decompose address: {}", address);
+                return ResponseEntity.badRequest().build();
+            }
+
+            String paymentHash = components.getPaymentScriptHash();
+            String stakeHash = components.getStakeKeyHash();
+
+            log.debug("Extracted from address - payment: {}, stake: {}", paymentHash, stakeHash);
+
+            // Query balances using payment hash as "stake key"
+            List<BalanceLogEntity> balancesFromPayment = new ArrayList<>();
+            if (paymentHash != null && !paymentHash.isEmpty()) {
+                balancesFromPayment = balanceService.getLatestBalancesByStakeKey(paymentHash);
+                log.debug("Found {} balance entries using payment hash", balancesFromPayment.size());
+            }
+
+            // Query balances using stake hash as "stake key"
+            List<BalanceLogEntity> balancesFromStake = new ArrayList<>();
+            if (stakeHash != null && !stakeHash.isEmpty()) {
+                balancesFromStake = balanceService.getLatestBalancesByStakeKey(stakeHash);
+                log.debug("Found {} balance entries using stake hash", balancesFromStake.size());
+            }
+
+            // Merge results - use LinkedHashMap to preserve order and avoid duplicates by address
+            Map<String, BalanceLogEntity> mergedMap = new LinkedHashMap<>();
+
+            for (BalanceLogEntity entity : balancesFromPayment) {
+                mergedMap.put(entity.getAddress(), entity);
+            }
+
+            for (BalanceLogEntity entity : balancesFromStake) {
+                mergedMap.put(entity.getAddress(), entity);
+            }
+
+            List<BalanceLogEntity> mergedBalances = new ArrayList<>(mergedMap.values());
+
+            log.debug("Merged result: {} unique programmable token addresses", mergedBalances.size());
+
+            // Build response
+            WalletBalanceResponse response = WalletBalanceResponse.builder()
+                    .walletAddress(address)
+                    .paymentHash(paymentHash)
+                    .stakeHash(stakeHash)
+                    .balances(mergedBalances)
+                    .build();
+
+            return ResponseEntity.ok(response);
+
+        } catch (Exception e) {
+            log.error("Error processing wallet balance for address: {}", address, e);
+            return ResponseEntity.badRequest().build();
+        }
     }
 }

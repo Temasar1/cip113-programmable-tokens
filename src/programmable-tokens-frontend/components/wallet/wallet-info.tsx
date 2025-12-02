@@ -5,18 +5,38 @@ import { useWallet } from "@meshsdk/react";
 import { Card, CardContent } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
-import { Copy, LogOut, Wallet } from "lucide-react";
+import { Copy, LogOut, Wallet, Coins, RefreshCw } from "lucide-react";
 import { truncateAddress, formatADAWithSymbol, getNetworkDisplayName } from "@/lib/utils";
 import { useToast } from "@/components/ui/toast";
+import { getWalletBalance, parseWalletBalance } from "@/lib/api";
+import { ParsedBalance } from "@/types/api";
 
 export function WalletInfo() {
   const { connected, wallet, disconnect } = useWallet();
   const { toast } = useToast();
   const [address, setAddress] = useState<string>("");
   const [balance, setBalance] = useState<string>("0");
+  const [programmableBalance, setProgrammableBalance] = useState<ParsedBalance | null>(null);
   const [isLoading, setIsLoading] = useState(true);
+  const [isLoadingProgrammable, setIsLoadingProgrammable] = useState(false);
 
   const network = process.env.NEXT_PUBLIC_NETWORK || "preview";
+
+  // Load programmable token balances
+  const loadProgrammableBalances = async (walletAddress: string) => {
+    try {
+      setIsLoadingProgrammable(true);
+      const response = await getWalletBalance(walletAddress);
+      const parsed = await parseWalletBalance(response);
+      setProgrammableBalance(parsed);
+    } catch (error) {
+      console.error("Failed to load programmable token balances:", error);
+      // Don't show error toast - just means no programmable tokens yet
+      setProgrammableBalance(null);
+    } finally {
+      setIsLoadingProgrammable(false);
+    }
+  };
 
   useEffect(() => {
     async function loadWalletInfo() {
@@ -29,7 +49,11 @@ export function WalletInfo() {
         setIsLoading(true);
         const usedAddresses = await wallet.getUsedAddresses();
         if (usedAddresses && usedAddresses.length > 0) {
-          setAddress(usedAddresses[0]);
+          const addr = usedAddresses[0];
+          setAddress(addr);
+
+          // Load programmable token balances
+          loadProgrammableBalances(addr);
         }
 
         const lovelace = await wallet.getLovelace();
@@ -71,6 +95,13 @@ export function WalletInfo() {
     disconnect();
     setAddress("");
     setBalance("0");
+    setProgrammableBalance(null);
+  };
+
+  const handleRefreshProgrammable = () => {
+    if (address) {
+      loadProgrammableBalances(address);
+    }
   };
 
   if (!connected || !wallet) {
@@ -113,12 +144,91 @@ export function WalletInfo() {
             </div>
 
             <div className="space-y-2">
-              <label className="text-sm text-dark-300">Balance</label>
+              <label className="text-sm text-dark-300">Wallet Balance</label>
               <div className="px-3 py-2 bg-dark-900 rounded">
                 <span className="text-2xl font-bold text-white">
                   {formatADAWithSymbol(balance)}
                 </span>
               </div>
+            </div>
+
+            {/* Programmable Token Balances Section */}
+            <div className="space-y-2 pt-2 border-t border-dark-700">
+              <div className="flex items-center justify-between">
+                <div className="flex items-center gap-2">
+                  <Coins className="h-4 w-4 text-accent-500" />
+                  <label className="text-sm text-dark-300">Programmable Tokens</label>
+                </div>
+                <button
+                  onClick={handleRefreshProgrammable}
+                  disabled={isLoadingProgrammable}
+                  className="p-1 hover:bg-dark-700 rounded transition-colors disabled:opacity-50"
+                  title="Refresh programmable token balances"
+                >
+                  <RefreshCw className={`h-3 w-3 text-dark-400 hover:text-white ${isLoadingProgrammable ? 'animate-spin' : ''}`} />
+                </button>
+              </div>
+
+              {isLoadingProgrammable ? (
+                <div className="flex items-center justify-center py-4">
+                  <div className="h-6 w-6 border-4 border-accent-500 border-t-transparent rounded-full animate-spin" />
+                </div>
+              ) : programmableBalance && (programmableBalance.assets.length > 0 || BigInt(programmableBalance.lovelace) > 0) ? (
+                <div className="space-y-3">
+                  {/* Locked ADA */}
+                  {BigInt(programmableBalance.lovelace) > 0 && (
+                    <div className="px-3 py-2 bg-dark-900 rounded">
+                      <div className="flex items-center justify-between">
+                        <div>
+                          <p className="text-xs text-dark-400">Locked ADA</p>
+                          <p className="text-sm text-white font-medium" title="ADA locked with programmable tokens">
+                            {formatADAWithSymbol(programmableBalance.lovelace)}
+                          </p>
+                        </div>
+                        <Badge variant="info" size="sm">Locked</Badge>
+                      </div>
+                    </div>
+                  )}
+
+                  {/* Programmable Tokens List */}
+                  {programmableBalance.assets.length > 0 && (
+                    <div className="space-y-2">
+                      {programmableBalance.assets.map((asset, index) => (
+                        <div key={`${asset.unit}-${index}`} className="px-3 py-2 bg-dark-900 rounded">
+                          <div className="flex items-start justify-between gap-2">
+                            <div className="flex-1 min-w-0">
+                              <div className="flex items-center gap-2 mb-1">
+                                <p className="text-sm font-medium text-white truncate">
+                                  {asset.assetName || asset.assetNameHex}
+                                </p>
+                                {asset.isProgrammable && (
+                                  <Badge variant="success" size="sm">Programmable</Badge>
+                                )}
+                              </div>
+                              <p className="text-xs text-dark-400 truncate" title={asset.policyId}>
+                                Policy: {asset.policyId.substring(0, 16)}...
+                              </p>
+                            </div>
+                            <div className="text-right">
+                              <p className="text-sm font-bold text-accent-400">
+                                {asset.amount}
+                              </p>
+                            </div>
+                          </div>
+                        </div>
+                      ))}
+                    </div>
+                  )}
+                </div>
+              ) : (
+                <div className="px-3 py-6 bg-dark-900 rounded text-center">
+                  <Coins className="h-8 w-8 text-dark-600 mx-auto mb-2" />
+                  <p className="text-sm text-dark-400">No programmable tokens found</p>
+                  <p className="text-xs text-dark-500 mt-1">
+                    Register and mint tokens to see them here
+                  </p>
+                </div>
+              )}
             </div>
 
             <Button
