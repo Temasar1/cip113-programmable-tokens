@@ -13,9 +13,16 @@ import { useToast } from '@/components/ui/use-toast';
 interface MintFormProps {
   substandards: Substandard[];
   onTransactionBuilt: (txHex: string, assetName: string, quantity: string) => void;
+  preSelectedSubstandard?: string;
+  preSelectedIssueContract?: string;
 }
 
-export function MintForm({ substandards, onTransactionBuilt }: MintFormProps) {
+export function MintForm({
+  substandards,
+  onTransactionBuilt,
+  preSelectedSubstandard,
+  preSelectedIssueContract,
+}: MintFormProps) {
   const { connected, wallet } = useWallet();
   const { toast: showToast } = useToast();
 
@@ -199,6 +206,8 @@ export function MintForm({ substandards, onTransactionBuilt }: MintFormProps) {
           substandards={substandards}
           onSelect={handleSubstandardSelect}
           disabled={isBuilding}
+          initialSubstandard={preSelectedSubstandard}
+          initialValidator={preSelectedIssueContract}
         />
         {errors.substandard && (
           <p className="mt-1 text-sm text-red-400">{errors.substandard}</p>

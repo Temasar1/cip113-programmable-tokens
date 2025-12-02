@@ -20,6 +20,26 @@ export interface Substandard {
 export type SubstandardsResponse = Substandard[];
 
 // ============================================================================
+// Token Registration
+// ============================================================================
+
+export interface RegisterTokenRequest {
+  registrarAddress: string;                    // User's wallet address
+  substandardName: string;                     // e.g., "dummy"
+  substandardIssueContractName: string;        // Required - validator title
+  substandardTransferContractName: string;     // Required - validator title
+  substandardThirdPartyContractName: string;   // Third-party validator (can be empty string)
+  assetName: string;                           // HEX ENCODED token name
+  quantity: string;                            // Amount to register/mint
+  recipientAddress: string;                    // Recipient address (can be empty string)
+}
+
+export interface RegisterTokenResponse {
+  policyId: string;              // Generated policy ID
+  unsignedCborTx: string;        // Unsigned transaction CBOR hex
+}
+
+// ============================================================================
 // Minting
 // ============================================================================
 
