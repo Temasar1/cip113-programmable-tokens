@@ -39,17 +39,16 @@ public class IssueTokenTest extends AbstractPreviewTest {
 
     private static final String SUBSTANDARD_TRANSFER_CONTRACT = "585701010029800aba2aba1aab9eaab9dab9a4888896600264646644b30013370e900218031baa00289919b87375a6012008904801980418039baa0028a504014600c600e002600c004600c00260066ea801a29344d9590011";
 
-    private String ISSUANCE_MINT, DIRECTORY_MINT_CONTRACT, DIRECTORY_SPEND_CONTRACT, PROGRAMMABLE_LOGIC_BASE_CONTRACT;
+    private String ISSUANCE_MINT, DIRECTORY_MINT_CONTRACT, DIRECTORY_SPEND_CONTRACT;
 
     private ProtocolBootstrapParams protocolBootstrapParams;
 
     @BeforeEach
     public void loadContracts() throws Exception {
-        protocolBootstrapParams = OBJECT_MAPPER.readValue(this.getClass().getClassLoader().getResourceAsStream("protocol-bootstraps-preview.json"), ProtocolBootstrapParams.class);
+        protocolBootstrapParams = OBJECT_MAPPER.readValue(this.getClass().getClassLoader().getResourceAsStream("protocol-bootstraps-preview.json"), ProtocolBootstrapParams[].class)[0];
         var plutus = OBJECT_MAPPER.readValue(this.getClass().getClassLoader().getResourceAsStream("plutus.json"), Plutus.class);
         var validators = plutus.validators();
         ISSUANCE_MINT = getCompiledCodeFor("issuance_mint.issuance_mint.mint", validators);
-        PROGRAMMABLE_LOGIC_BASE_CONTRACT = getCompiledCodeFor("programmable_logic_base.programmable_logic_base.spend", validators);
         DIRECTORY_MINT_CONTRACT = getCompiledCodeFor("registry_mint.registry_mint.mint", validators);
         DIRECTORY_SPEND_CONTRACT = getCompiledCodeFor("registry_spend.registry_spend.spend", validators);
     }

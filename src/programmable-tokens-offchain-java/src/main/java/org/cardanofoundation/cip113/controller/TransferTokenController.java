@@ -1,7 +1,12 @@
 package org.cardanofoundation.cip113.controller;
 
 import com.bloxbean.cardano.aiken.AikenScriptUtil;
+import com.bloxbean.cardano.client.address.Address;
 import com.bloxbean.cardano.client.address.AddressProvider;
+import com.bloxbean.cardano.client.address.Credential;
+import com.bloxbean.cardano.client.api.model.Amount;
+import com.bloxbean.cardano.client.api.model.Utxo;
+import com.bloxbean.cardano.client.api.util.ValueUtil;
 import com.bloxbean.cardano.client.plutus.blueprint.PlutusBlueprintUtil;
 import com.bloxbean.cardano.client.plutus.blueprint.model.PlutusVersion;
 import com.bloxbean.cardano.client.plutus.spec.BigIntPlutusData;
@@ -9,9 +14,16 @@ import com.bloxbean.cardano.client.plutus.spec.BytesPlutusData;
 import com.bloxbean.cardano.client.plutus.spec.ConstrPlutusData;
 import com.bloxbean.cardano.client.plutus.spec.ListPlutusData;
 import com.bloxbean.cardano.client.quicktx.QuickTxBuilder;
+import com.bloxbean.cardano.client.quicktx.ScriptTx;
+import com.bloxbean.cardano.client.transaction.spec.Asset;
+import com.bloxbean.cardano.client.transaction.spec.MultiAsset;
+import com.bloxbean.cardano.client.transaction.spec.TransactionInput;
+import com.bloxbean.cardano.client.transaction.spec.Value;
 import com.bloxbean.cardano.client.util.HexUtil;
+import com.bloxbean.cardano.yaci.store.utxo.storage.impl.model.UtxoId;
 import com.bloxbean.cardano.yaci.store.utxo.storage.impl.repository.UtxoRepository;
 import com.easy1staking.cardano.model.AssetType;
+import com.easy1staking.cardano.util.UtxoUtil;
 import com.fasterxml.jackson.databind.ObjectMapper;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
@@ -22,13 +34,11 @@ import org.cardanofoundation.cip113.service.ProtocolBootstrapService;
 import org.cardanofoundation.cip113.service.SubstandardService;
 import org.springframework.data.domain.Pageable;
 import org.springframework.http.ResponseEntity;
-import org.springframework.web.bind.annotation.PostMapping;
-import org.springframework.web.bind.annotation.RequestBody;
-import org.springframework.web.bind.annotation.RequestMapping;
-import org.springframework.web.bind.annotation.RequestParam;
-import org.springframework.web.bind.annotation.RestController;
+import org.springframework.web.bind.annotation.*;
 
+import java.math.BigInteger;
 import java.util.Collection;
+import java.util.List;
 
 @RestController
 @RequestMapping("${apiPrefix}/transfer-token")
@@ -54,6 +64,7 @@ public class TransferTokenController {
     public ResponseEntity<?> transfer(
             @RequestBody TransferTokenRequest transferTokenRequest,
             @RequestParam(required = false) String protocolTxHash) {
+
         log.info("transferTokenRequest: {}, protocolTxHash: {}", transferTokenRequest, protocolTxHash);
 
         var assetType = AssetType.fromUnit(transferTokenRequest.unit());
@@ -63,7 +74,7 @@ public class TransferTokenController {
 
             var protocolBootstrapParams = protocolTxHash != null && !protocolTxHash.isEmpty()
                     ? protocolBootstrapService.getProtocolBootstrapParamsByTxHash(protocolTxHash)
-                            .orElseThrow(() -> new IllegalArgumentException("Protocol version not found: " + protocolTxHash))
+                    .orElseThrow(() -> new IllegalArgumentException("Protocol version not found: " + protocolTxHash))
                     : protocolBootstrapService.getProtocolBootstrapParams();
 
             var protocolParamsScriptHash = protocolBootstrapParams.protocolParams().scriptHash();
@@ -113,37 +124,81 @@ public class TransferTokenController {
                         log.info("registryDatum: {}", registryDatum);
                     });
 
+            var progTokenRegistryOpt = registryEntries.stream()
+                    .flatMap(Collection::stream)
+                    .filter(addressUtxoEntity -> {
+                        var registryDatumOpt = registryNodeParser.parse(addressUtxoEntity.getInlineDatum());
+                        return registryDatumOpt.map(registryDatum -> registryDatum.key().equals(assetType.policyId())).orElse(false);
+                    })
+                    .findAny()
+                    .map(UtxoUtil::toUtxo);
 
-//            var protocolParamsUtxoOpt = bfBackendService.getUtxoService().getTxOutput(bootstrapTxHash, 0);
-//            if (!protocolParamsUtxoOpt.isSuccessful()) {
-//                Assertions.fail("could not fetch protocol params utxo");
-//            }
-//            var protocolParamsUtxo = protocolParamsUtxoOpt.getValue();
-//            log.info("protocolParamsUtxo: {}", protocolParamsUtxo);
-//
-//            var utxosOpt = bfBackendService.getUtxoService().getUtxos(aliceAccount.baseAddress(), 100, 1);
-//            if (!utxosOpt.isSuccessful() || utxosOpt.getValue().isEmpty()) {
-//                Assertions.fail("no utxos available");
-//            }
-//            var walletUtxos = utxosOpt.getValue();
-//
-//            var substandardIssueContract = PlutusBlueprintUtil.getPlutusScriptFromCompiledCode(SUBSTANDARD_ISSUE_CONTRACT, PlutusVersion.v3);
-//            log.info("substandardIssueContract: {}", substandardIssueContract.getPolicyId());
-//            var substandardIssueAddress = AddressProvider.getRewardAddress(substandardIssueContract, network);
-//            log.info("substandardIssueAddress: {}", substandardIssueAddress.getAddress());
-//
-//            var substandardTransferContract = PlutusBlueprintUtil.getPlutusScriptFromCompiledCode(SUBSTANDARD_TRANSFER_CONTRACT, PlutusVersion.v3);
-//            log.info("substandardTransferContract: {}", substandardTransferContract.getPolicyId());
-//            var substandardTransferAddress = AddressProvider.getRewardAddress(substandardTransferContract, network);
-//            log.info("substandardTransferAddress: {}", substandardTransferAddress.getAddress());
-//
-//
-//            // Programmable Logic Global parameterization
-//            var programmableLogicGlobalParameters = ListPlutusData.of(BytesPlutusData.of(HexUtil.decodeHexString(protocolBootstrapParams.protocolParams().scriptHash())));
-//            var programmableLogicGlobalContract = PlutusBlueprintUtil.getPlutusScriptFromCompiledCode(AikenScriptUtil.applyParamToScript(programmableLogicGlobalParameters, PROGRAMMABLE_LOGIC_GLOBAL_CONTRACT), PlutusVersion.v3);
+            if (progTokenRegistryOpt.isEmpty()) {
+                return ResponseEntity.internalServerError().body("could not find registry entry for token");
+            }
+
+            var progTokenRegistry = progTokenRegistryOpt.get();
+
+            var protocolParamsUtxoOpt = utxoRepository.findById(UtxoId.builder()
+                    .txHash(bootstrapTxHash)
+                    .outputIndex(0)
+                    .build());
+            if (protocolParamsUtxoOpt.isEmpty()) {
+                return ResponseEntity.internalServerError().body("could not resolve protocol params");
+            }
+
+            var protocolParamsUtxo = protocolParamsUtxoOpt.get();
+            log.info("protocolParamsUtxo: {}", protocolParamsUtxo);
+
+            var senderAddress = new Address(transferTokenRequest.senderAddress());
+            var senderProgrammableTokenAddress = AddressProvider.getBaseAddress(Credential.fromScript(protocolBootstrapParams.programmableLogicBaseParams().scriptHash()),
+                    senderAddress.getDelegationCredential().get(),
+                    network.getCardanoNetwork());
+
+            var recipientAddress = new Address(transferTokenRequest.recipientAddress());
+            var recipientProgrammableTokenAddress = AddressProvider.getBaseAddress(Credential.fromScript(protocolBootstrapParams.programmableLogicBaseParams().scriptHash()),
+                    recipientAddress.getDelegationCredential().get(),
+                    network.getCardanoNetwork());
+
+            var senderProgTokenAddressesOpt = utxoRepository.findUnspentByOwnerAddr(senderProgrammableTokenAddress.getAddress(), Pageable.unpaged());
+            var senderProgTokensUtxos = senderProgTokenAddressesOpt.stream()
+                    .flatMap(Collection::stream)
+                    .map(UtxoUtil::toUtxo)
+                    .toList();
+
+            senderProgTokensUtxos.forEach(utxo -> log.info("utxo: {}", utxo));
+
+            log.info("senderProgTokensUtxos size: {}", senderProgTokensUtxos.size());
+
+//            var senderProgTokensValue = senderProgTokensUtxos.stream()
+//                    .map(Utxo::toValue)
+//                    .reduce(Value::add)
+//                    .orElse(Value.builder().build());
+            var senderProgTokensValue = senderProgTokensUtxos.getFirst().toValue();
+
+            var progTokenAmount = senderProgTokensValue.amountOf(assetType.policyId(), "0x" + assetType.assetName());
+
+            if (progTokenAmount.compareTo(new BigInteger(transferTokenRequest.quantity())) < 0) {
+                return ResponseEntity.badRequest().body("Not enough funds");
+            }
+
+            var senderUtxos = utxoRepository.findUnspentByOwnerAddr(transferTokenRequest.senderAddress(), Pageable.unpaged())
+                    .stream()
+                    .flatMap(Collection::stream)
+                    .map(UtxoUtil::toUtxo)
+                    .toList();
+
+            var programmableLogicGlobalContractOpt = protocolBootstrapService.getProtocolContract("programmable_logic_global.programmable_logic_global.withdraw");
+            if (programmableLogicGlobalContractOpt.isEmpty()) {
+                return ResponseEntity.internalServerError().body("could not resolve programmable logic global");
+            }
+            var programmableLogicGlobalContract = programmableLogicGlobalContractOpt.get();
+            // Programmable Logic Global parameterization
+            var programmableLogicGlobalParameters = ListPlutusData.of(BytesPlutusData.of(HexUtil.decodeHexString(protocolBootstrapParams.protocolParams().scriptHash())));
+            var programmableLogicGlobal = PlutusBlueprintUtil.getPlutusScriptFromCompiledCode(AikenScriptUtil.applyParamToScript(programmableLogicGlobalParameters, programmableLogicGlobalContract), PlutusVersion.v3);
 //            log.info("programmableLogicGlobalContract policy: {}", programmableLogicGlobalContract.getPolicyId());
-//            var programmableLogicGlobalAddress = AddressProvider.getRewardAddress(programmableLogicGlobalContract, network);
-//            log.info("programmableLogicGlobalAddress policy: {}", programmableLogicGlobalAddress.getAddress());
+            var programmableLogicGlobalAddress = AddressProvider.getRewardAddress(programmableLogicGlobal, network.getCardanoNetwork());
+            log.info("programmableLogicGlobalAddress policy: {}", programmableLogicGlobalAddress.getAddress());
 ////
 ////        var registerAddressTx = new Tx()
 ////                .from(adminAccount.baseAddress())
@@ -154,153 +209,102 @@ public class TransferTokenController {
 ////                .feePayer(adminAccount.baseAddress())
 ////                .withSigner(SignerProviders.signerFrom(adminAccount))
 ////                .completeAndWait();
-//
-//            // Programmable Logic Base parameterization
-//            var programmableLogicBaseParameters = ListPlutusData.of(ConstrPlutusData.of(1, BytesPlutusData.of(programmableLogicGlobalContract.getScriptHash())));
-//            var programmableLogicBaseContract = PlutusBlueprintUtil.getPlutusScriptFromCompiledCode(AikenScriptUtil.applyParamToScript(programmableLogicBaseParameters, PROGRAMMABLE_LOGIC_BASE_CONTRACT), PlutusVersion.v3);
-//            log.info("programmableLogicBaseContract policy: {}", programmableLogicBaseContract.getPolicyId());
-//
-//
-//            // Directory SPEND parameterization
-//            var directorySpendParameters = ListPlutusData.of(
-//                    BytesPlutusData.of(HexUtil.decodeHexString(protocolBootstrapParams.protocolParams().scriptHash()))
-//            );
-//            var directorySpendContract = PlutusBlueprintUtil.getPlutusScriptFromCompiledCode(AikenScriptUtil.applyParamToScript(directorySpendParameters, DIRECTORY_SPEND_CONTRACT), PlutusVersion.v3);
-//            var directorySpendContractAddress = AddressProvider.getEntAddress(Credential.fromScript(directorySpendContract.getScriptHash()), network);
-//
-//
-//            var directoryUtxosOpt = bfBackendService.getUtxoService().getUtxos(directorySpendContractAddress.getAddress(), 100, 1);
-//            if (!directoryUtxosOpt.isSuccessful()) {
-//                Assertions.fail("no directories");
-//            }
-//            var directoryUtxos = directoryUtxosOpt.getValue();
-//            directoryUtxos.forEach(utxo -> log.info("directory utxo: {}", utxo));
-//
-//            var directoryUtxoOpt = directoryUtxos.stream().filter(utxo -> utxo.getAmount().stream().anyMatch(amount -> directoryNftUnit.equals(amount.getUnit()))).findAny();
-//            if (directoryUtxoOpt.isEmpty()) {
-//                Assertions.fail("no directory utxo for unit: " + directoryNftUnit);
-//            }
-//            var directoryUtxo = directoryUtxoOpt.get();
-//            log.info("directoryUtxo: {}", directoryUtxo);
-//
-//
-//            var aliceAddress = AddressProvider.getBaseAddress(Credential.fromScript(protocolBootstrapParams.programmableLogicBaseParams().scriptHash()),
-//                    aliceAccount.getBaseAddress().getDelegationCredential().get(),
-//                    network);
-//            log.info("aliceAddress: {}", aliceAddress);
-//            var progBaseAddressUtxosOpt = bfBackendService.getUtxoService().getUtxos(aliceAddress.getAddress(), 100, 1);
-//            if (!progBaseAddressUtxosOpt.isSuccessful() || progBaseAddressUtxosOpt.getValue().isEmpty()) {
-//                Assertions.fail("not progBaseAddresses");
-//            }
-//
-//            var bobAddress = AddressProvider.getBaseAddress(Credential.fromScript(protocolBootstrapParams.programmableLogicBaseParams().scriptHash()),
-//                    bobAccount.getBaseAddress().getDelegationCredential().get(),
-//                    network);
-//            log.info("bobAddress: {}", bobAddress);
-//
-//            var progBaseAddressUtxos = progBaseAddressUtxosOpt.getValue();
-//            progBaseAddressUtxos.forEach(utxo -> log.info("prog tokens utxo: {}", utxo));
-//            var progTokenUtxoOpt = progBaseAddressUtxos.stream().filter(utxo -> utxo.getAmount().stream().anyMatch(amount -> progToken.toUnit().equals(amount.getUnit()))).findAny();
-//            if (progTokenUtxoOpt.isEmpty()) {
-//                Assertions.fail("no prog token utxo for unit: " + progToken);
-//            }
-//            var progTokenUtxo = progTokenUtxoOpt.get();
-//            log.info("progTokenUtxo: {}", progTokenUtxo);
-//
-//            var initialValue = progTokenUtxo.toValue();
-//            var tokenAmount = initialValue.amountOf(progToken.policyId(), "0x" + progToken.assetName());
-//            var amount1 = tokenAmount.divide(BigInteger.TWO);
-//            var amount2 = tokenAmount.subtract(amount1);
-//
-//            // Programmable Token Mint
-//            var tokenAsset1 = Asset.builder()
-//                    .name(HexUtil.encodeHexString("PINT".getBytes(), true))
-//                    .value(amount1)
-//                    .build();
-//
-//            var tokenAsset2 = Asset.builder()
-//                    .name(HexUtil.encodeHexString("PINT".getBytes(), true))
-//                    .value(amount1)
-//                    .build();
-//
-//            Value tokenValue1 = Value.builder()
-//                    .coin(Amount.ada(1).getQuantity())
-//                    .multiAssets(List.of(
-//                            MultiAsset.builder()
-//                                    .policyId(progToken.policyId())
-//                                    .assets(List.of(tokenAsset1))
-//                                    .build()
-//                    ))
-//                    .build();
-//
-//            Value tokenValue2 = Value.builder()
-//                    .coin(Amount.ada(1).getQuantity())
-//                    .multiAssets(List.of(
-//                            MultiAsset.builder()
-//                                    .policyId(progToken.policyId())
-//                                    .assets(List.of(tokenAsset2))
-//                                    .build()
-//                    ))
-//                    .build();
-//
-//
-////        /// Redeemer for the global programmable logic stake validator
-////pub type ProgrammableLogicGlobalRedeemer {
-////  /// Transfer action with proofs for each token type
-////  TransferAct { proofs: List<TokenProof> }
-////  /// Seize action to confiscate tokens from blacklisted address
-////  SeizeAct {
-////    seize_input_idx: Int,
-////    seize_output_idx: Int,
-////    directory_node_idx: Int,
-////  }
-////}
-//
-//            var programmableGlobalRedeemer = ConstrPlutusData.of(0,
-//                    // only one prop and it's a list
-//                    ListPlutusData.of(ConstrPlutusData.of(0, BigIntPlutusData.of(1)))
-//            );
-//
-//            log.info("protocolBootstrapParams.programmableGlobalRefInput(): {}", protocolBootstrapParams.programmableGlobalRefInput());
-//
-//            var tx = new ScriptTx()
-//                    .collectFrom(walletUtxos)
-//                    .collectFrom(progTokenUtxo, ConstrPlutusData.of(0))
-//                    // must be first Provide proofs
-//                    .withdraw(substandardTransferAddress.getAddress(), BigInteger.ZERO, BigIntPlutusData.of(200))
-//                    .withdraw(programmableLogicGlobalAddress.getAddress(), BigInteger.ZERO, programmableGlobalRedeemer)
-//                    .payToContract(aliceAddress.getAddress(), ValueUtil.toAmountList(tokenValue1), ConstrPlutusData.of(0))
-//                    .payToContract(bobAddress.getAddress(), ValueUtil.toAmountList(tokenValue2), ConstrPlutusData.of(0))
-//                    .payToAddress(aliceAccount.baseAddress(), Amount.ada(5))
-//                    .payToAddress(aliceAccount.baseAddress(), Amount.ada(5))
-//                    .readFrom(TransactionInput.builder()
-//                            .transactionId(protocolParamsUtxo.getTxHash())
-//                            .index(protocolParamsUtxo.getOutputIndex())
-//                            .build(), TransactionInput.builder()
-//                            .transactionId(directoryUtxo.getTxHash())
-//                            .index(directoryUtxo.getOutputIndex())
-//                            .build())
-//                    .attachRewardValidator(programmableLogicGlobalContract) // global
-//                    .attachRewardValidator(substandardTransferContract)
-//                    .attachSpendingValidator(programmableLogicBaseContract) // base
-//                    .withChangeAddress(aliceAccount.baseAddress());
-//
-//            var transaction = quickTxBuilder.compose(tx)
-//                    .withSigner(SignerProviders.signerFrom(aliceAccount))
-//                    .withSigner(SignerProviders.stakeKeySignerFrom(aliceAccount))
-//                    .withTxEvaluator(new AikenTransactionEvaluator(bfBackendService))
-//                    .withRequiredSigners(aliceAccount.getBaseAddress().getDelegationCredentialHash().get())
-//                    .feePayer(aliceAccount.baseAddress())
-//                    .mergeOutputs(false)
-//                    .build();
-//
-//
-//            log.info("tx: {}", transaction.serializeToHex());
-//            log.info("tx: {}", objectMapper.writeValueAsString(transaction));
-//
-//            return ResponseEntity.ok(transaction.serializeToHex());
 
-            return ResponseEntity.ok().build();
+            var programmableLogicBaseContractOpt = protocolBootstrapService.getProtocolContract("programmable_logic_base.programmable_logic_base.spend");
+            if (programmableLogicBaseContractOpt.isEmpty()) {
+                return ResponseEntity.internalServerError().body("could not resolve programmable logic base");
+            }
+            var programmableLogicBaseContract = programmableLogicBaseContractOpt.get();
+
+//            // Programmable Logic Base parameterization
+            var programmableLogicBaseParameters = ListPlutusData.of(ConstrPlutusData.of(1, BytesPlutusData.of(programmableLogicGlobal.getScriptHash())));
+            var programmableLogicBase = PlutusBlueprintUtil.getPlutusScriptFromCompiledCode(AikenScriptUtil.applyParamToScript(programmableLogicBaseParameters, programmableLogicBaseContract), PlutusVersion.v3);
+            log.info("programmableLogicBase policy: {}", programmableLogicBase.getPolicyId());
+
+            // Programmable Token Mint
+            var returningValue = senderProgTokensValue.subtract(assetType.policyId(), "0x" + assetType.assetName(), new BigInteger(transferTokenRequest.quantity()));
+
+            var tokenAsset2 = Asset.builder()
+                    .name("0x" + assetType.assetName())
+                    .value(new BigInteger(transferTokenRequest.quantity()))
+                    .build();
+
+            Value tokenValue2 = Value.builder()
+                    .coin(Amount.ada(1).getQuantity())
+                    .multiAssets(List.of(
+                            MultiAsset.builder()
+                                    .policyId(progToken.policyId())
+                                    .assets(List.of(tokenAsset2))
+                                    .build()
+                    ))
+                    .build();
+
+
+            var programmableGlobalRedeemer = ConstrPlutusData.of(0,
+                    // only one prop and it's a list
+                    ListPlutusData.of(ConstrPlutusData.of(0, BigIntPlutusData.of(1)))
+            );
+
+            // FIXME:
+            var substandardTransferContractOpt = substandardService.getSubstandardValidator("dummy", "transfer.transfer.withdraw");
+            if (substandardTransferContractOpt.isEmpty()) {
+                log.warn("could not resolve transfer contract");
+                return ResponseEntity.badRequest().body("could not resolve transfer contract");
+            }
+            var substandardTransferContract = PlutusBlueprintUtil.getPlutusScriptFromCompiledCode(substandardTransferContractOpt.get().scriptBytes(), PlutusVersion.v3);
+            var substandardTransferAddress = AddressProvider.getRewardAddress(substandardTransferContract, network.getCardanoNetwork());
+            log.info("substandardTransferAddress: {}", substandardTransferAddress.getAddress());
+
+            var tx = new ScriptTx()
+                    .collectFrom(senderUtxos)
+                    .collectFrom(senderProgTokensUtxos.getFirst(), ConstrPlutusData.of(0))
+                    // must be first Provide proofs
+                    .withdraw(substandardTransferAddress.getAddress(), BigInteger.ZERO, BigIntPlutusData.of(200))
+                    .withdraw(programmableLogicGlobalAddress.getAddress(), BigInteger.ZERO, programmableGlobalRedeemer)
+                    .payToContract(senderProgrammableTokenAddress.getAddress(), ValueUtil.toAmountList(returningValue), ConstrPlutusData.of(0))
+                    .payToContract(recipientProgrammableTokenAddress.getAddress(), ValueUtil.toAmountList(tokenValue2), ConstrPlutusData.of(0))
+                    .readFrom(TransactionInput.builder()
+                            .transactionId(protocolParamsUtxo.getTxHash())
+                            .index(protocolParamsUtxo.getOutputIndex())
+                            .build(), TransactionInput.builder()
+                            .transactionId(progTokenRegistry.getTxHash())
+                            .index(progTokenRegistry.getOutputIndex())
+                            .build())
+                    .attachRewardValidator(programmableLogicGlobal) // global
+                    .attachRewardValidator(substandardTransferContract)
+                    .attachSpendingValidator(programmableLogicBase) // base
+                    .withChangeAddress(senderAddress.getAddress());
+
+            var transaction = quickTxBuilder.compose(tx)
+                    .withRequiredSigners(senderAddress.getDelegationCredentialHash().get())
+                    .feePayer(senderAddress.getAddress())
+                    .mergeOutputs(false)
+                    .postBalanceTx((txBuilderContext, transaction1) -> {
+                        var fees = transaction1.getBody().getFee();
+                        var newFees = fees.add(BigInteger.valueOf(200_000L));
+                        transaction1.getBody().setFee(newFees);
+
+                        transaction1.getBody()
+                                .getOutputs()
+                                .stream()
+                                .filter(transactionOutput -> senderAddress.getAddress().equals(transactionOutput.getAddress()) && transactionOutput.getValue().getCoin().compareTo(BigInteger.valueOf(2_000_000)) > 0)
+                                .findAny()
+                                .ifPresent(transactionOutput -> {
+                                    transactionOutput.setValue(transactionOutput.getValue().substractCoin(BigInteger.valueOf(200_000L)));
+                                });
+
+                        transaction1.getBody().setTotalCollateral(transaction1.getBody().getTotalCollateral().add(BigInteger.valueOf(500_000L)));
+                        var collateralReturn = transaction1.getBody().getCollateralReturn();
+                        collateralReturn.setValue(collateralReturn.getValue().substractCoin(BigInteger.valueOf(500_000L)));
+//                        transaction1.getBody().setCollateralReturn();
+                    })
+                    .build();
+
+
+            log.info("tx: {}", transaction.serializeToHex());
+            log.info("tx: {}", objectMapper.writeValueAsString(transaction));
+
+            return ResponseEntity.ok(transaction.serializeToHex());
 
         } catch (Exception e) {
             return ResponseEntity.internalServerError().body(e.getMessage());

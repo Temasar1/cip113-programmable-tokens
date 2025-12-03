@@ -96,6 +96,20 @@ export interface ProtocolVersionInfo {
 }
 
 // ============================================================================
+// Token Transfer
+// ============================================================================
+
+export interface TransferTokenRequest {
+  senderAddress: string;      // Sender's wallet address
+  unit: string;               // Full unit (policyId + assetName hex)
+  quantity: string;           // Amount to transfer
+  recipientAddress: string;   // Recipient's address
+}
+
+// Backend returns plain text CBOR hex string (not JSON)
+export type TransferTokenResponse = string;
+
+// ============================================================================
 // Balance
 // ============================================================================
 
