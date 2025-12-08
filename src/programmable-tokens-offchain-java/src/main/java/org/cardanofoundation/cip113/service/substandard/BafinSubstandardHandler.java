@@ -6,11 +6,8 @@ import com.bloxbean.cardano.client.plutus.blueprint.model.PlutusVersion;
 import com.bloxbean.cardano.client.plutus.spec.*;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
+import org.cardanofoundation.cip113.model.*;
 import org.cardanofoundation.cip113.model.bootstrap.ProtocolBootstrapParams;
-import org.cardanofoundation.cip113.model.TransactionContext;
-import org.cardanofoundation.cip113.model.MintTokenRequest;
-import org.cardanofoundation.cip113.model.RegisterTokenRequest;
-import org.cardanofoundation.cip113.model.TransferTokenRequest;
 import org.cardanofoundation.cip113.service.ProtocolScriptBuilderService;
 import org.cardanofoundation.cip113.service.SubstandardService;
 import org.springframework.stereotype.Service;
@@ -37,11 +34,9 @@ public class BafinSubstandardHandler implements SubstandardHandler {
     }
 
     @Override
-    public TransactionContext buildRegistrationTransaction(
+    public RegisterTransactionContext buildRegistrationTransaction(
             RegisterTokenRequest request,
-            ProtocolBootstrapParams protocolParams,
-            ProtocolScriptBuilderService protocolScriptBuilder
-    ) {
+            ProtocolBootstrapParams protocolParams    ) {
         // TODO: Implement Bafin registration logic
         // Bafin has 22 validators that need to be parameterized and registered
         log.warn("Bafin registration not yet implemented");
@@ -51,9 +46,7 @@ public class BafinSubstandardHandler implements SubstandardHandler {
     @Override
     public TransactionContext buildMintTransaction(
             MintTokenRequest request,
-            ProtocolBootstrapParams protocolParams,
-            ProtocolScriptBuilderService protocolScriptBuilder
-    ) {
+            ProtocolBootstrapParams protocolParams    ) {
         // TODO: Implement Bafin minting logic
         log.warn("Bafin minting not yet implemented");
         throw new UnsupportedOperationException("Bafin substandard minting not yet implemented");
@@ -62,9 +55,7 @@ public class BafinSubstandardHandler implements SubstandardHandler {
     @Override
     public TransactionContext buildTransferTransaction(
             TransferTokenRequest request,
-            ProtocolBootstrapParams protocolParams,
-            ProtocolScriptBuilderService protocolScriptBuilder
-    ) {
+            ProtocolBootstrapParams protocolParams    ) {
         // TODO: Implement Bafin transfer logic
         log.warn("Bafin transfer not yet implemented");
         throw new UnsupportedOperationException("Bafin substandard transfer not yet implemented");

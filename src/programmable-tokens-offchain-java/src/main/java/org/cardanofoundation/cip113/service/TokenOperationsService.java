@@ -4,10 +4,7 @@ import com.easy1staking.cardano.model.AssetType;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
 import org.cardanofoundation.cip113.entity.RegistryNodeEntity;
-import org.cardanofoundation.cip113.model.MintTokenRequest;
-import org.cardanofoundation.cip113.model.RegisterTokenRequest;
-import org.cardanofoundation.cip113.model.TransactionContext;
-import org.cardanofoundation.cip113.model.TransferTokenRequest;
+import org.cardanofoundation.cip113.model.*;
 import org.cardanofoundation.cip113.model.bootstrap.ProtocolBootstrapParams;
 import org.cardanofoundation.cip113.service.substandard.SubstandardHandlerFactory;
 import org.springframework.stereotype.Service;
@@ -26,7 +23,6 @@ public class TokenOperationsService {
 
     private final SubstandardHandlerFactory handlerFactory;
     private final ProtocolBootstrapService protocolBootstrapService;
-    private final ProtocolScriptBuilderService protocolScriptBuilder;
     private final RegistryService registryService;
 
     /**
@@ -36,7 +32,7 @@ public class TokenOperationsService {
      * @param protocolTxHash Optional protocol version tx hash (uses default if null)
      * @return Transaction context with unsigned CBOR tx
      */
-    public TransactionContext registerToken(RegisterTokenRequest request, String protocolTxHash) {
+    public RegisterTransactionContext registerToken(RegisterTokenRequest request, String protocolTxHash) {
         log.info("Registering token with substandard: {}, protocol: {}",
                 request.substandardName(), protocolTxHash);
 
@@ -47,11 +43,7 @@ public class TokenOperationsService {
         var handler = handlerFactory.getHandler(request.substandardName());
 
         // Build registration transaction
-        var txContext = handler.buildRegistrationTransaction(
-                request,
-                protocolParams,
-                protocolScriptBuilder
-        );
+        var txContext = handler.buildRegistrationTransaction(request, protocolParams);
 
         log.info("Registration transaction built successfully for substandard: {}",
                 request.substandardName());
@@ -73,17 +65,15 @@ public class TokenOperationsService {
         var protocolParams = resolveProtocolParams(protocolTxHash);
 
         // Resolve substandard from registry
-        String substandardId = resolveSubstandardFromRegistry("request.unit()");
+//        String substandardId = resolveSubstandardFromRegistry("request.unit()");
+        String substandardId = request.substandardName();
 
         // Get substandard handler
         var handler = handlerFactory.getHandler(substandardId);
 
         // Build mint transaction
-        var txContext = handler.buildMintTransaction(
-                request,
-                protocolParams,
-                protocolScriptBuilder
-        );
+        var txContext = handler.buildMintTransaction(request,
+                protocolParams);
 
         log.info("Mint transaction built successfully for substandard: {}", substandardId);
 
@@ -99,7 +89,7 @@ public class TokenOperationsService {
      */
     public TransactionContext transferToken(
             TransferTokenRequest request,
-            String protocolTxHash    ) {
+            String protocolTxHash) {
         log.info("Transferring token: {}, protocol: {}", request.unit(), protocolTxHash);
 
         // Get protocol bootstrap params
@@ -113,8 +103,7 @@ public class TokenOperationsService {
 
         // Build transfer transaction
         var txContext = handler.buildTransferTransaction(request,
-                protocolParams,
-                protocolScriptBuilder);
+                protocolParams);
 
         log.info("Transfer transaction built successfully for substandard: {}", substandardId);
 

@@ -1,12 +1,8 @@
 package org.cardanofoundation.cip113.service.substandard;
 
 import com.bloxbean.cardano.client.plutus.spec.PlutusScript;
-import org.cardanofoundation.cip113.model.MintTokenRequest;
-import org.cardanofoundation.cip113.model.RegisterTokenRequest;
-import org.cardanofoundation.cip113.model.TransactionContext;
-import org.cardanofoundation.cip113.model.TransferTokenRequest;
+import org.cardanofoundation.cip113.model.*;
 import org.cardanofoundation.cip113.model.bootstrap.ProtocolBootstrapParams;
-import org.cardanofoundation.cip113.service.ProtocolScriptBuilderService;
 
 import java.util.Set;
 
@@ -24,42 +20,34 @@ public interface SubstandardHandler {
     /**
      * Build registration transaction for this substandard
      *
-     * @param request               The registration request
-     * @param protocolParams        The protocol bootstrap parameters (from bootstrap tx)
-     * @param protocolScriptBuilder Service to get parameterized standard scripts
+     * @param request        The registration request
+     * @param protocolParams The protocol bootstrap parameters (from bootstrap tx)
      * @return Transaction context with unsigned CBOR tx and metadata
      */
-    TransactionContext buildRegistrationTransaction(
+    RegisterTransactionContext buildRegistrationTransaction(
             RegisterTokenRequest request,
-            ProtocolBootstrapParams protocolParams,
-            ProtocolScriptBuilderService protocolScriptBuilder
-    );
+            ProtocolBootstrapParams protocolParams);
 
     /**
      * Build mint transaction for this substandard
      *
-     * @param request               The mint request
-     * @param protocolParams        The protocol bootstrap parameters (from bootstrap tx)
-     * @param protocolScriptBuilder Service to get parameterized standard scripts
+     * @param request        The mint request
+     * @param protocolParams The protocol bootstrap parameters (from bootstrap tx)
      * @return Transaction context with unsigned CBOR tx and metadata
      */
     TransactionContext buildMintTransaction(
             MintTokenRequest request,
-            ProtocolBootstrapParams protocolParams,
-            ProtocolScriptBuilderService protocolScriptBuilder
-    );
+            ProtocolBootstrapParams protocolParams);
 
     /**
      * Build transfer transaction for this substandard
      *
-     * @param request               The transfer request
-     * @param protocolParams        The protocol bootstrap parameters (from bootstrap tx)
-     * @param protocolScriptBuilder Service to get parameterized standard scripts
+     * @param request        The transfer request
+     * @param protocolParams The protocol bootstrap parameters (from bootstrap tx)
      * @return Transaction context with unsigned CBOR tx and metadata
      */
     TransactionContext buildTransferTransaction(TransferTokenRequest request,
-                                                ProtocolBootstrapParams protocolParams,
-                                                ProtocolScriptBuilderService protocolScriptBuilder);
+                                                ProtocolBootstrapParams protocolParams);
 
     /**
      * Returns the set of validator script names required by this substandard
