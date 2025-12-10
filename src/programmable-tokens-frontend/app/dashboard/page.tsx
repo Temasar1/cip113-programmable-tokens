@@ -16,8 +16,6 @@ import { truncateAddress, formatDate, getExplorerTxUrl } from "@/lib/utils/forma
 
 // Force dynamic rendering and disable prerendering for WASM compatibility
 export const dynamic = 'force-dynamic';
-export const dynamicParams = true;
-export const revalidate = 0;
 
 export default function DashboardPage() {
   const { connected, wallet } = useWallet();
