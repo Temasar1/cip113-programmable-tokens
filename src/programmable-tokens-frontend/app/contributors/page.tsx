@@ -18,8 +18,8 @@ interface Contributor {
 
 const contributors: Contributor[] = [
   {
-    name: "Philip DiSarro",
-    role: "CIP-143 Author",
+    name: "Phil Di Sarro",
+    role: "Anastasia Labs CEO",
     description: "Author of CIP-143, which provided the foundational registry code that CIP-113 builds upon. Creator of the WSC Proof of Concept implementation.",
     githubProfile: "https://github.com/PhilipDisarro",
     repositories: [
@@ -66,9 +66,9 @@ const contributors: Contributor[] = [
     ]
   },
   {
-    name: "Giovanni",
+    name: "Giovanni Gargiulo",
     role: "Cardano Foundation",
-    description: "Lead developer of this CIP-113 reference implementation. Built the full-stack application demonstrating programmable token registration, minting, transfers, and burning on Cardano.",
+    description: "CIP-113 contributor. Provided extensive documentation, api indexer, and build the full-stack application demonstrating programmable token registration, minting, transfers, and burning on Cardano.",
     repositories: [
       {
         name: "cip113-programmable-tokens",
@@ -81,11 +81,18 @@ const contributors: Contributor[] = [
 
 export default function ContributorsPage() {
   return (
-    <PageContainer
-      title="Contributors"
-      description="Core contributors to the CIP-113 Programmable Tokens standard and implementation"
-    >
-      <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
+    <PageContainer>
+      <div className="space-y-6">
+        {/* Page Header */}
+        <div>
+          <h1 className="text-3xl font-bold text-white mb-2">Contributors</h1>
+          <p className="text-dark-300">
+            Core contributors to the CIP-113 Programmable Tokens standard and implementation
+          </p>
+        </div>
+
+        {/* Contributors Grid */}
+        <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
         {contributors.map((contributor) => (
           <Card key={contributor.name} className="flex flex-col">
             <CardHeader>
@@ -158,42 +165,43 @@ export default function ContributorsPage() {
             </CardContent>
           </Card>
         ))}
-      </div>
+        </div>
 
-      {/* Additional Info */}
-      <Card className="mt-8">
-        <CardContent className="py-6">
-          <div className="text-center space-y-2">
-            <h3 className="text-lg font-semibold text-white">About CIP-113</h3>
-            <p className="text-sm text-dark-300 max-w-3xl mx-auto">
-              CIP-113 defines a standard for programmable tokens on Cardano, enabling complex
-              validation logic for token operations including minting, burning, and transfers.
-              This work builds upon CIP-143 and incorporates contributions from multiple teams
-              across the Cardano ecosystem to create an interoperable standard for smart tokens.
-            </p>
-            <div className="flex justify-center gap-4 pt-4">
-              <a
-                href="https://cips.cardano.org/cps/CPS-0003"
-                target="_blank"
-                rel="noopener noreferrer"
-                className="text-sm text-primary-400 hover:text-primary-300 transition-colors inline-flex items-center gap-1"
-              >
-                Read CPS-0003 Problem Statement
-                <ExternalLink className="h-3 w-3" />
-              </a>
-              <a
-                href="https://github.com/cardano-foundation/CIPs/tree/master/CIP-0113"
-                target="_blank"
-                rel="noopener noreferrer"
-                className="text-sm text-primary-400 hover:text-primary-300 transition-colors inline-flex items-center gap-1"
-              >
-                Read CIP-113 Specification
-                <ExternalLink className="h-3 w-3" />
-              </a>
+        {/* Additional Info */}
+        <Card>
+          <CardContent className="py-6">
+            <div className="text-center space-y-2">
+              <h3 className="text-lg font-semibold text-white">About CIP-113</h3>
+              <p className="text-sm text-dark-300 max-w-3xl mx-auto">
+                CIP-113 defines a standard for programmable tokens on Cardano, enabling complex
+                validation logic for token operations including minting, burning, and transfers.
+                This work builds upon CIP-143 and incorporates contributions from multiple teams
+                across the Cardano ecosystem to create an interoperable standard for smart tokens.
+              </p>
+              <div className="flex justify-center gap-4 pt-4">
+                <a
+                  href="https://cips.cardano.org/cps/CPS-0003"
+                  target="_blank"
+                  rel="noopener noreferrer"
+                  className="text-sm text-primary-400 hover:text-primary-300 transition-colors inline-flex items-center gap-1"
+                >
+                  Read CPS-0003 Problem Statement
+                  <ExternalLink className="h-3 w-3" />
+                </a>
+                <a
+                  href="https://github.com/cardano-foundation/CIPs/tree/master/CIP-0113"
+                  target="_blank"
+                  rel="noopener noreferrer"
+                  className="text-sm text-primary-400 hover:text-primary-300 transition-colors inline-flex items-center gap-1"
+                >
+                  Read CIP-113 Specification
+                  <ExternalLink className="h-3 w-3" />
+                </a>
+              </div>
             </div>
-          </div>
-        </CardContent>
-      </Card>
+          </CardContent>
+        </Card>
+      </div>
     </PageContainer>
   );
 }
