@@ -4,6 +4,7 @@ import com.bloxbean.cardano.client.address.Address;
 import com.bloxbean.cardano.client.address.AddressProvider;
 import com.bloxbean.cardano.client.address.Credential;
 import com.bloxbean.cardano.client.api.model.Amount;
+import com.bloxbean.cardano.client.api.model.Utxo;
 import com.bloxbean.cardano.client.api.util.ValueUtil;
 import com.bloxbean.cardano.client.plutus.blueprint.PlutusBlueprintUtil;
 import com.bloxbean.cardano.client.plutus.blueprint.model.PlutusVersion;
@@ -19,6 +20,7 @@ import com.bloxbean.cardano.yaci.store.utxo.storage.impl.model.UtxoId;
 import com.bloxbean.cardano.yaci.store.utxo.storage.impl.repository.UtxoRepository;
 import com.easy1staking.cardano.model.AssetType;
 import com.easy1staking.cardano.util.UtxoUtil;
+import com.easy1staking.util.Pair;
 import com.fasterxml.jackson.core.JsonProcessingException;
 import com.fasterxml.jackson.databind.ObjectMapper;
 import lombok.RequiredArgsConstructor;
@@ -38,6 +40,7 @@ import java.util.Collection;
 import java.util.List;
 import java.util.Optional;
 import java.util.Set;
+import java.util.stream.Stream;
 
 /**
  * Handler for the "dummy" programmable token substandard.
@@ -426,13 +429,12 @@ public class DummySubstandardHandler implements SubstandardHandler {
     public TransactionContext buildTransferTransaction(TransferTokenRequest transferTokenRequest,
                                                        ProtocolBootstrapParams protocolBootstrapParams) {
 
-        var assetType = AssetType.fromUnit(transferTokenRequest.unit());
-
         try {
 
             var bootstrapTxHash = protocolBootstrapParams.txHash();
 
             var progToken = AssetType.fromUnit(transferTokenRequest.unit());
+            log.info("policy id: {}, asset name: {}", progToken.policyId(), progToken.unsafeHumanAssetName());
 
             // Directory SPEND parameterization
             var directorySpendContract = protocolScriptBuilderService.getParameterizedDirectorySpendScript(protocolBootstrapParams);
@@ -444,7 +446,7 @@ public class DummySubstandardHandler implements SubstandardHandler {
                     .flatMap(Collection::stream)
                     .filter(addressUtxoEntity -> {
                         var registryDatumOpt = registryNodeParser.parse(addressUtxoEntity.getInlineDatum());
-                        return registryDatumOpt.map(registryDatum -> registryDatum.key().equals(assetType.policyId())).orElse(false);
+                        return registryDatumOpt.map(registryDatum -> registryDatum.key().equals(progToken.policyId())).orElse(false);
                     })
                     .findAny()
                     .map(UtxoUtil::toUtxo);
@@ -483,9 +485,13 @@ public class DummySubstandardHandler implements SubstandardHandler {
                     .map(UtxoUtil::toUtxo)
                     .toList();
 
-            var senderProgTokensValue = senderProgTokensUtxos.getFirst().toValue();
+            var senderProgTokensValue = senderProgTokensUtxos.stream()
+                    .map(Utxo::toValue)
+                    .filter(value -> value.amountOf(progToken.policyId(), "0x" + progToken.assetName()).compareTo(BigInteger.ZERO) > 0)
+                    .reduce(Value::add)
+                    .orElse(Value.builder().build());
 
-            var progTokenAmount = senderProgTokensValue.amountOf(assetType.policyId(), "0x" + assetType.assetName());
+            var progTokenAmount = senderProgTokensValue.amountOf(progToken.policyId(), "0x" + progToken.assetName());
 
             if (progTokenAmount.compareTo(new BigInteger(transferTokenRequest.quantity())) < 0) {
                 return TransactionContext.error("Not enough funds");
@@ -508,10 +514,11 @@ public class DummySubstandardHandler implements SubstandardHandler {
             log.info("programmableLogicBase policy: {}", programmableLogicBase.getPolicyId());
 
             // Programmable Token Mint
-            var returningValue = senderProgTokensValue.subtract(assetType.policyId(), "0x" + assetType.assetName(), new BigInteger(transferTokenRequest.quantity()));
+            var valueToSend = Value.from(progToken.policyId(), "0x" + progToken.assetName(), new BigInteger(transferTokenRequest.quantity()));
+            var returningValue = senderProgTokensValue.subtract(valueToSend);
 
             var tokenAsset2 = Asset.builder()
-                    .name("0x" + assetType.assetName())
+                    .name("0x" + progToken.assetName())
                     .value(new BigInteger(transferTokenRequest.quantity()))
                     .build();
 
@@ -541,11 +548,34 @@ public class DummySubstandardHandler implements SubstandardHandler {
             var substandardTransferAddress = AddressProvider.getRewardAddress(substandardTransferContract, network.getCardanoNetwork());
             log.info("substandardTransferAddress: {}", substandardTransferAddress.getAddress());
 
+            var inputUtxos = senderProgTokensUtxos.stream()
+                    .reduce(new Pair<List<Utxo>, Value>(List.of(), Value.builder().build()),
+                            (listValuePair, utxo) -> {
+                                if (listValuePair.second().subtract(valueToSend).isPositive()) {
+                                    return listValuePair;
+                                } else {
+                                    if (utxo.toValue().amountOf(progToken.policyId(), "0x" + progToken.assetName()).compareTo(BigInteger.ZERO) > 0) {
+                                        var newUtxos = Stream.concat(Stream.of(utxo), listValuePair.first().stream());
+                                        return new Pair<>(newUtxos.toList(), listValuePair.second().add(utxo.toValue()));
+                                    } else {
+                                        return listValuePair;
+                                    }
+                                }
+                            }, (listValuePair, listValuePair2) -> {
+                                var newUtxos = Stream.concat(listValuePair.first().stream(), listValuePair.first().stream());
+                                return new Pair<>(newUtxos.toList(), listValuePair.second().add(listValuePair2.second()));
+                            })
+                    .first();
+
             var tx = new ScriptTx()
-                    .collectFrom(senderUtxos)
-                    .collectFrom(senderProgTokensUtxos.getFirst(), ConstrPlutusData.of(0))
-                    // must be first Provide proofs
-                    .withdraw(substandardTransferAddress.getAddress(), BigInteger.ZERO, BigIntPlutusData.of(200))
+                    .collectFrom(senderUtxos);
+
+            inputUtxos.forEach(utxo -> {
+                 tx.collectFrom(utxo, ConstrPlutusData.of(0));
+            });
+
+            // must be first Provide proofs
+            tx.withdraw(substandardTransferAddress.getAddress(), BigInteger.ZERO, BigIntPlutusData.of(200))
                     .withdraw(programmableLogicGlobalAddress.getAddress(), BigInteger.ZERO, programmableGlobalRedeemer)
                     .payToContract(senderProgrammableTokenAddress.getAddress(), ValueUtil.toAmountList(returningValue), ConstrPlutusData.of(0))
                     .payToContract(recipientProgrammableTokenAddress.getAddress(), ValueUtil.toAmountList(tokenValue2), ConstrPlutusData.of(0))

@@ -21,7 +21,7 @@ const contributors: Contributor[] = [
     name: "Phil Di Sarro",
     role: "Anastasia Labs CEO",
     description: "Author of CIP-143, which provided the foundational registry code that CIP-113 builds upon. Creator of the WSC Proof of Concept implementation.",
-    githubProfile: "https://github.com/PhilipDisarro",
+    githubProfile: "https://github.com/colll78",
     repositories: [
       {
         name: "wsc-poc",
@@ -52,6 +52,7 @@ const contributors: Contributor[] = [
     name: "Matteo Coppola",
     role: "FluidTokens",
     description: "Core contributor to the CIP-113 standard. Implemented the BaFin (German Federal Financial Supervisory Authority) compliance standard for tokenization in the FluidTokens repository.",
+    githubProfile: "https://github.com/matteocoppola",
     repositories: [
       {
         name: "fluidtokens",
@@ -69,6 +70,7 @@ const contributors: Contributor[] = [
     name: "Giovanni Gargiulo",
     role: "Cardano Foundation",
     description: "CIP-113 contributor. Provided extensive documentation, api indexer, and build the full-stack application demonstrating programmable token registration, minting, transfers, and burning on Cardano.",
+    githubProfile: "https://github.com/nemo83",
     repositories: [
       {
         name: "cip113-programmable-tokens",

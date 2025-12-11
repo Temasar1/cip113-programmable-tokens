@@ -86,6 +86,7 @@ public class BalanceEventListener {
 
                                     BalanceAggregator aggregator = balanceChanges.computeIfAbsent(address,
                                             k -> new BalanceAggregator(address, components));
+                                    log.info("address: {}, input value: {}", address, inputValue);
                                     aggregator.subtractInput(inputValue);
                                 }
                             });
@@ -107,12 +108,15 @@ public class BalanceEventListener {
 
                                     BalanceAggregator aggregator = balanceChanges.computeIfAbsent(address,
                                             k -> new BalanceAggregator(address, components));
+                                    log.info("address: {}, output value: {}", address, outputValue);
                                     aggregator.addOutput(outputValue);
                                 }
                             });
 
                     // Save balance changes to database
                     balanceChanges.forEach((address, aggregator) -> {
+
+                        log.info("address: {}, aggregator: {}", address, aggregator.getNetChange());
 
                         var netChange = aggregator.getNetChange();
                         // Get previous balance
