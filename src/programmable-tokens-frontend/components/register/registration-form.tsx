@@ -5,9 +5,14 @@ import { useWallet } from '@meshsdk/react';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { ValidatorTripleSelector } from './validator-triple-selector';
+import { TransactionBuilderToggle, TransactionBuilder } from '@/components/mint/transaction-builder-toggle';
 import { Substandard, RegisterTokenRequest } from '@/types/api';
-import { registerToken, stringToHex } from '@/lib/api';
+import { registerToken, stringToHex, getProtocolBlueprint, getProtocolBootstrap, getSubstandardBlueprint } from '@/lib/api';
 import { useToast } from '@/components/ui/use-toast';
+import { useProtocolVersion } from '@/contexts/protocol-version-context';
+import { getSubstandardHandler } from '@/lib/standard/factory';
+import type { RegisterTransactionParams } from '@/lib/standard/factory';
+import type { IWallet } from '@meshsdk/core';
 
 interface RegistrationFormProps {
   substandards: Substandard[];
@@ -28,6 +33,7 @@ export function RegistrationForm({
 }: RegistrationFormProps) {
   const { connected, wallet } = useWallet();
   const { toast: showToast } = useToast();
+  const { selectedVersion } = useProtocolVersion();
 
   const [tokenName, setTokenName] = useState('');
   const [quantity, setQuantity] = useState('');
@@ -36,6 +42,7 @@ export function RegistrationForm({
   const [issueContract, setIssueContract] = useState('');
   const [transferContract, setTransferContract] = useState('');
   const [thirdPartyContract, setThirdPartyContract] = useState('');
+  const [transactionBuilder, setTransactionBuilder] = useState<TransactionBuilder>('backend');
   const [isBuilding, setIsBuilding] = useState(false);
 
   const [errors, setErrors] = useState({
@@ -123,31 +130,80 @@ export function RegistrationForm({
       }
       const registrarAddress = addresses[0];
 
-      // Prepare registration request
-      const request: RegisterTokenRequest = {
-        registrarAddress,
-        substandardName: substandardId,
-        substandardIssueContractName: issueContract,
-        substandardTransferContractName: transferContract,
-        substandardThirdPartyContractName: thirdPartyContract || '',
-        assetName: stringToHex(tokenName),
-        quantity,
-        recipientAddress: recipientAddress.trim() || '',
-      };
+      let unsignedCborTx: string;
+      let policyId: string;
 
-      // Call backend to build registration transaction
-      const response = await registerToken(request);
+      if (transactionBuilder === 'frontend') {
+        // Client-side transaction building
+        showToast({
+          title: 'Building Transaction',
+          description: 'Building transaction on client side...',
+          variant: 'default',
+        });
+
+        // Fetch protocol data
+        const protocolTxHash = selectedVersion?.txHash;
+        const [protocolBlueprint, protocolBootstrap, substandardBlueprint] = await Promise.all([
+          getProtocolBlueprint(),
+          getProtocolBootstrap(protocolTxHash),
+          getSubstandardBlueprint(substandardId),
+        ]);
+
+        // Get substandard handler
+        const handler = getSubstandardHandler(substandardId as 'dummy' | 'bafin');
+
+        // Prepare register parameters
+        const registerParams: RegisterTransactionParams = {
+          assetName: tokenName,
+          quantity,
+          registrarAddress,
+          recipientAddress: recipientAddress.trim() || undefined,
+          substandardName: substandardId,
+          substandardIssueContractName: issueContract,
+          substandardTransferContractName: transferContract,
+          substandardThirdPartyContractName: thirdPartyContract || undefined,
+          networkId: 0, // Preview/testnet
+        };
+
+        // Build transaction client-side
+        const {unsignedTx, policy_Id} = await handler.buildRegisterTransaction(
+          registerParams,
+          protocolBootstrap,
+          protocolBlueprint,
+          substandardBlueprint,
+          wallet as IWallet
+        );
+        unsignedCborTx = unsignedTx;
+        policyId = policy_Id;
+      } else {
+        // Server-side transaction building (existing logic)
+        const request: RegisterTokenRequest = {
+          registrarAddress,
+          substandardName: substandardId,
+          substandardIssueContractName: issueContract,
+          substandardTransferContractName: transferContract,
+          substandardThirdPartyContractName: thirdPartyContract || '',
+          assetName: stringToHex(tokenName),
+          quantity,
+          recipientAddress: recipientAddress.trim() || '',
+        };
+
+        // Call backend to build registration transaction
+        const response = await registerToken(request, selectedVersion?.txHash);
+        unsignedCborTx = response.unsignedCborTx;
+        policyId = response.policyId;
+      }
 
       showToast({
         title: 'Transaction Built',
-        description: 'Review and sign the transaction to register your token',
+        description: `Transaction built successfully using ${transactionBuilder} builder`,
         variant: 'success',
       });
 
       // Pass transaction to parent for preview and signing
       onTransactionBuilt(
-        response.unsignedCborTx,
-        response.policyId,
+        unsignedCborTx,
+        policyId,
         substandardId,
         issueContract,
         tokenName,
@@ -249,6 +305,13 @@ export function RegistrationForm({
           />
         </div>
       </div>
+
+      {/* Transaction Builder Toggle */}
+      <TransactionBuilderToggle
+        value={transactionBuilder}
+        onChange={setTransactionBuilder}
+        disabled={isBuilding}
+      />
 
       {/* Submit Button */}
       <Button

@@ -44,7 +44,8 @@ import java.util.stream.Stream;
 
 /**
  * Handler for the "dummy" programmable token substandard.
- * This is a simple reference implementation with basic issue and transfer validators.
+ * This is a simple reference implementation with basic issue and transfer
+ * validators.
  */
 @Service
 @RequiredArgsConstructor
@@ -72,76 +73,88 @@ public class DummySubstandardHandler implements SubstandardHandler {
 
     @Override
     public RegisterTransactionContext buildRegistrationTransaction(RegisterTokenRequest registerTokenRequest,
-                                                                   ProtocolBootstrapParams protocolBootstrapParams) {
+            ProtocolBootstrapParams protocolBootstrapParams) {
 
         try {
 
-            var directorySpendContract = protocolScriptBuilderService.getParameterizedDirectorySpendScript(protocolBootstrapParams);
+            var directorySpendContract = protocolScriptBuilderService
+                    .getParameterizedDirectorySpendScript(protocolBootstrapParams); //done
 
-            var bootstrapTxHash = protocolBootstrapParams.txHash();
+            var bootstrapTxHash = protocolBootstrapParams.txHash(); //protocol param txhash for start //done
 
             var protocolParamsUtxoOpt = utxoRepository.findById(UtxoId.builder()
                     .txHash(bootstrapTxHash)
-                    .outputIndex(0)
+                    .outputIndex(0)   //done
                     .build());
 
             if (protocolParamsUtxoOpt.isEmpty()) {
                 return RegisterTransactionContext.error("could not resolve protocol params");
-            }
+            }  //done
 
-            var protocolParamsUtxo = protocolParamsUtxoOpt.get();
+            var protocolParamsUtxo = protocolParamsUtxoOpt.get();  //done
 
-            var directorySpendContractAddress = AddressProvider.getEntAddress(directorySpendContract, network.getCardanoNetwork());
-            log.info("directorySpendContractAddress: {}", directorySpendContractAddress.getAddress());
+            var directorySpendContractAddress = AddressProvider.getEntAddress(directorySpendContract,
+                    network.getCardanoNetwork());
+            log.info("directorySpendContractAddress: {}", directorySpendContractAddress.getAddress());  //done
 
-            var directoryMintContract = protocolScriptBuilderService.getParameterizedDirectoryMintScript(protocolBootstrapParams);
+            var directoryMintContract = protocolScriptBuilderService
+                    .getParameterizedDirectoryMintScript(protocolBootstrapParams);  //done
 
-            var issuanceUtxoOpt = utxoRepository.findById(UtxoId.builder().txHash(bootstrapTxHash).outputIndex(2).build());
+            var issuanceUtxoOpt = utxoRepository
+                    .findById(UtxoId.builder().txHash(bootstrapTxHash).outputIndex(2).build());
             if (issuanceUtxoOpt.isEmpty()) {
-                return RegisterTransactionContext.error("could not resolve issuance params");
+                return RegisterTransactionContext.error("could not resolve issuance params");  //done
             }
             var issuanceUtxo = issuanceUtxoOpt.get();
-            log.info("issuanceUtxo: {}", issuanceUtxo);
+            log.info("issuanceUtxo: {}", issuanceUtxo); //done
 
-            var rigistrarUtxosOpt = utxoRepository.findUnspentByOwnerAddr(registerTokenRequest.registrarAddress(), Pageable.unpaged());
+            var rigistrarUtxosOpt = utxoRepository.findUnspentByOwnerAddr(registerTokenRequest.registrarAddress(),
+                    Pageable.unpaged());
             if (rigistrarUtxosOpt.isEmpty()) {
-                return RegisterTransactionContext.error("issuer wallet is empty");
+                return RegisterTransactionContext.error("issuer wallet is empty");  //done
             }
-            var registrarUtxos = rigistrarUtxosOpt.get().stream().map(UtxoUtil::toUtxo).toList();
+            var registrarUtxos = rigistrarUtxosOpt.get().stream().map(UtxoUtil::toUtxo).toList(); //done
 
-            var substandardIssuanceContractOpt = substandardService.getSubstandardValidator(registerTokenRequest.substandardName(), registerTokenRequest.substandardIssueContractName());
-            var substandardTransferContractOpt = substandardService.getSubstandardValidator(registerTokenRequest.substandardName(), registerTokenRequest.substandardTransferContractName());
+            var substandardIssuanceContractOpt = substandardService.getSubstandardValidator(
+                    registerTokenRequest.substandardName(), registerTokenRequest.substandardIssueContractName());   //done
+            var substandardTransferContractOpt = substandardService.getSubstandardValidator(
+                    registerTokenRequest.substandardName(), registerTokenRequest.substandardTransferContractName());  //done
 
             var thirdPartyScriptHash = Optional.ofNullable(registerTokenRequest.substandardName())
-                    .flatMap(substandardName -> substandardService.getSubstandardValidator(registerTokenRequest.substandardName(), substandardName))
+                    .flatMap(substandardName -> substandardService
+                            .getSubstandardValidator(registerTokenRequest.substandardName(), substandardName))
                     .map(SubstandardValidator::scriptHash)
-                    .orElse("");
+                    .orElse("");     //done
 
             if (substandardIssuanceContractOpt.isEmpty() || substandardTransferContractOpt.isEmpty()) {
                 log.warn("substandard issuance or transfer contract are empty");
                 return RegisterTransactionContext.error("substandard issuance or transfer contract are empty");
-            }
+            }  //done 
 
-            var substandardIssueContract = PlutusBlueprintUtil.getPlutusScriptFromCompiledCode(substandardIssuanceContractOpt.get().scriptBytes(), PlutusVersion.v3);
-            log.info("substandardIssueContract: {}", substandardIssueContract.getPolicyId());
+            var substandardIssueContract = PlutusBlueprintUtil.getPlutusScriptFromCompiledCode(
+                    substandardIssuanceContractOpt.get().scriptBytes(), PlutusVersion.v3);
+            log.info("substandardIssueContract: {}", substandardIssueContract.getPolicyId());  //done
 
-            var substandardIssueAddress = AddressProvider.getRewardAddress(substandardIssueContract, network.getCardanoNetwork());
-            log.info("substandardIssueAddress: {}", substandardIssueAddress.getAddress());
+            var substandardIssueAddress = AddressProvider.getRewardAddress(substandardIssueContract,
+                    network.getCardanoNetwork());
+            log.info("substandardIssueAddress: {}", substandardIssueAddress.getAddress());  //done
 
-            var substandardTransferContract = PlutusBlueprintUtil.getPlutusScriptFromCompiledCode(substandardTransferContractOpt.get().scriptBytes(), PlutusVersion.v3);
+            var substandardTransferContract = PlutusBlueprintUtil.getPlutusScriptFromCompiledCode(
+                    substandardTransferContractOpt.get().scriptBytes(), PlutusVersion.v3);  //done
 
-            var issuanceContract = protocolScriptBuilderService.getParameterizedIssuanceMintScript(protocolBootstrapParams, substandardIssueContract);
-            final var progTokenPolicyId = issuanceContract.getPolicyId();
+            var issuanceContract = protocolScriptBuilderService
+                    .getParameterizedIssuanceMintScript(protocolBootstrapParams, substandardIssueContract);
+            final var progTokenPolicyId = issuanceContract.getPolicyId();  //done
             log.info("issuanceContract: {}", progTokenPolicyId);
 
-            var registryEntries = utxoRepository.findUnspentByOwnerPaymentCredential(directorySpendContract.getPolicyId(), Pageable.unpaged());
+            var registryEntries = utxoRepository
+                    .findUnspentByOwnerPaymentCredential(directorySpendContract.getPolicyId(), Pageable.unpaged());   //done
 
             var registryEntryOpt = registryEntries.stream()
                     .flatMap(Collection::stream)
                     .filter(addressUtxoEntity -> registryNodeParser.parse(addressUtxoEntity.getInlineDatum())
-                            .map(registryNode -> registryNode.key().equals(progTokenPolicyId))
-                            .orElse(false)
-                    )
+                            .map(registryNode -> registryNode.key().equals(progTokenPolicyId))   //done
+                            .orElse(false))
                     .findAny();
 
             if (registryEntryOpt.isEmpty()) {
@@ -153,13 +166,13 @@ public class DummySubstandardHandler implements SubstandardHandler {
 
                             if (registryDatumOpt.isEmpty()) {
                                 log.warn("could not parse registry datum for: {}", addressUtxoEntity.getInlineDatum());
-                                return false;
+                                return false;  //done
                             }
 
                             var registryDatum = registryDatumOpt.get();
 
                             var after = registryDatum.key().compareTo(progTokenPolicyId) < 0;
-                            var before = progTokenPolicyId.compareTo(registryDatum.next()) < 0;
+                            var before = progTokenPolicyId.compareTo(registryDatum.next()) < 0;   //done
                             log.info("after:{}, before: {}", after, before);
                             return after && before;
 
@@ -167,37 +180,36 @@ public class DummySubstandardHandler implements SubstandardHandler {
                         .findAny();
 
                 if (nodeToReplaceOpt.isEmpty()) {
-                    return RegisterTransactionContext.error("could not find node to replace");
+                    return RegisterTransactionContext.error("could not find node to replace");  //done
                 }
 
                 var directoryUtxo = UtxoUtil.toUtxo(nodeToReplaceOpt.get());
                 log.info("directoryUtxo: {}", directoryUtxo);
-                var existingRegistryNodeDatumOpt = registryNodeParser.parse(directoryUtxo.getInlineDatum());
+                var existingRegistryNodeDatumOpt = registryNodeParser.parse(directoryUtxo.getInlineDatum());  //done
 
                 if (existingRegistryNodeDatumOpt.isEmpty()) {
-                    return RegisterTransactionContext.error("could not parse current registry node");
+                    return RegisterTransactionContext.error("could not parse current registry node");  //done
                 }
 
-                var existingRegistryNodeDatum = existingRegistryNodeDatumOpt.get();
+                var existingRegistryNodeDatum = existingRegistryNodeDatumOpt.get();  //done
 
                 // Directory MINT - NFT, address, datum and value
-                var directoryMintRedeemer = ConstrPlutusData.of(1,
+                var directoryMintRedeemer = ConstrPlutusData.of(1, //done
                         BytesPlutusData.of(issuanceContract.getScriptHash()),
-                        BytesPlutusData.of(substandardIssueContract.getScriptHash())
-                );
+                        BytesPlutusData.of(substandardIssueContract.getScriptHash()));  //done
 
                 var directoryMintNft = Asset.builder()
                         .name("0x" + issuanceContract.getPolicyId())
-                        .value(BigInteger.ONE)
+                        .value(BigInteger.ONE)        //done
                         .build();
 
                 var directorySpendNft = Asset.builder()
-                        .name("0x")
+                        .name("0x")  //done
                         .value(BigInteger.ONE)
                         .build();
 
                 var directorySpendDatum = existingRegistryNodeDatum.toBuilder()
-                        .next(HexUtil.encodeHexString(issuanceContract.getScriptHash()))
+                        .next(HexUtil.encodeHexString(issuanceContract.getScriptHash()))   //done
                         .build();
                 log.info("directorySpendDatum: {}", directorySpendDatum);
 
@@ -212,10 +224,9 @@ public class DummySubstandardHandler implements SubstandardHandler {
                         .coin(Amount.ada(1).getQuantity())
                         .multiAssets(List.of(
                                 MultiAsset.builder()
-                                        .policyId(directoryMintContract.getPolicyId())
+                                        .policyId(directoryMintContract.getPolicyId())  //done
                                         .assets(List.of(directoryMintNft))
-                                        .build()
-                        ))
+                                        .build()))
                         .build();
                 log.info("directoryMintValue: {}", directoryMintValue);
 
@@ -224,14 +235,13 @@ public class DummySubstandardHandler implements SubstandardHandler {
                         .multiAssets(List.of(
                                 MultiAsset.builder()
                                         .policyId(directoryMintContract.getPolicyId())
-                                        .assets(List.of(directorySpendNft))
-                                        .build()
-                        ))
+                                        .assets(List.of(directorySpendNft))  //done
+                                        .build()))
                         .build();
                 log.info("directorySpendValue: {}", directorySpendValue);
 
-
-                var issuanceRedeemer = ConstrPlutusData.of(0, ConstrPlutusData.of(1, BytesPlutusData.of(substandardIssueContract.getScriptHash())));
+                var issuanceRedeemer = ConstrPlutusData.of(0,
+                        ConstrPlutusData.of(1, BytesPlutusData.of(substandardIssueContract.getScriptHash())));
 
                 // Programmable Token Mint
                 var programmableToken = Asset.builder()
@@ -245,37 +255,41 @@ public class DummySubstandardHandler implements SubstandardHandler {
                                 MultiAsset.builder()
                                         .policyId(issuanceContract.getPolicyId())
                                         .assets(List.of(programmableToken))
-                                        .build()
-                        ))
+                                        .build()))
                         .build();
 
-                var payee = registerTokenRequest.recipientAddress() == null || registerTokenRequest.recipientAddress().isBlank() ? registerTokenRequest.registrarAddress() : registerTokenRequest.recipientAddress();
+                var payee = registerTokenRequest.recipientAddress() == null
+                        || registerTokenRequest.recipientAddress().isBlank() ? registerTokenRequest.registrarAddress()
+                                : registerTokenRequest.recipientAddress();
                 log.info("payee: {}", payee);
 
                 var payeeAddress = new Address(payee);
 
-                var targetAddress = AddressProvider.getBaseAddress(Credential.fromScript(protocolBootstrapParams.programmableLogicBaseParams().scriptHash()),
+                var targetAddress = AddressProvider.getBaseAddress(
+                        Credential.fromScript(protocolBootstrapParams.programmableLogicBaseParams().scriptHash()),
                         payeeAddress.getDelegationCredential().get(),
                         network.getCardanoNetwork());
 
-
                 var tx = new ScriptTx()
-                        .collectFrom(registrarUtxos)
-                        .collectFrom(directoryUtxo, ConstrPlutusData.of(0))
-                        .withdraw(substandardIssueAddress.getAddress(), BigInteger.ZERO, BigIntPlutusData.of(100))
+                        .collectFrom(registrarUtxos)  //done
+                        .collectFrom(directoryUtxo, ConstrPlutusData.of(0))  //done
+                        .withdraw(substandardIssueAddress.getAddress(), BigInteger.ZERO, BigIntPlutusData.of(100)) //done
                         // Mint Token
-                        .mintAsset(issuanceContract, programmableToken, issuanceRedeemer)
+                        .mintAsset(issuanceContract, programmableToken, issuanceRedeemer) //done
                         // Redeemer is DirectoryInit (constr(0))
                         .mintAsset(directoryMintContract, directoryMintNft, directoryMintRedeemer)
-                        .payToContract(targetAddress.getAddress(), ValueUtil.toAmountList(programmableTokenValue), ConstrPlutusData.of(0))
+                        .payToContract(targetAddress.getAddress(), ValueUtil.toAmountList(programmableTokenValue), //done
+                                ConstrPlutusData.of(0))
                         // Directory Params
-                        .payToContract(directorySpendContractAddress.getAddress(), ValueUtil.toAmountList(directorySpendValue), directorySpendDatum.toPlutusData())
+                        .payToContract(directorySpendContractAddress.getAddress(),
+                                ValueUtil.toAmountList(directorySpendValue), directorySpendDatum.toPlutusData())
                         // Directory Params
-                        .payToContract(directorySpendContractAddress.getAddress(), ValueUtil.toAmountList(directoryMintValue), directoryMintDatum.toPlutusData())
+                        .payToContract(directorySpendContractAddress.getAddress(),
+                                ValueUtil.toAmountList(directoryMintValue), directoryMintDatum.toPlutusData())
                         .readFrom(TransactionInput.builder()
-                                        .transactionId(protocolParamsUtxo.getTxHash())
-                                        .index(protocolParamsUtxo.getOutputIndex())
-                                        .build(),
+                                .transactionId(protocolParamsUtxo.getTxHash())
+                                .index(protocolParamsUtxo.getOutputIndex())
+                                .build(),
                                 TransactionInput.builder()
                                         .transactionId(issuanceUtxo.getTxHash())
                                         .index(issuanceUtxo.getOutputIndex())
@@ -285,10 +299,10 @@ public class DummySubstandardHandler implements SubstandardHandler {
                         .withChangeAddress(registerTokenRequest.registrarAddress());
 
                 var transaction = quickTxBuilder.compose(tx)
-//                    .withSigner(SignerProviders.signerFrom(adminAccount))
-//                    .withTxEvaluator(new AikenTransactionEvaluator(bfBackendService))
+                        // .withSigner(SignerProviders.signerFrom(adminAccount))
+                        // .withTxEvaluator(new AikenTransactionEvaluator(bfBackendService))
                         .feePayer(registerTokenRequest.registrarAddress())
-                        .mergeOutputs(false) //<-- this is important! or directory tokens will go to same address
+                        .mergeOutputs(false) // <-- this is important! or directory tokens will go to same address
                         .preBalanceTx((txBuilderContext, transaction1) -> {
                             var outputs = transaction1.getBody().getOutputs();
                             if (outputs.getFirst().getAddress().equals(registerTokenRequest.registrarAddress())) {
@@ -314,13 +328,12 @@ public class DummySubstandardHandler implements SubstandardHandler {
                 log.info("tx: {}", transaction.serializeToHex());
                 log.info("tx: {}", objectMapper.writeValueAsString(transaction));
 
-
                 return RegisterTransactionContext.ok(transaction.serializeToHex(), progTokenPolicyId);
             } else {
 
-                return RegisterTransactionContext.error(String.format("Token policy %s already registered", progTokenPolicyId));
+                return RegisterTransactionContext
+                        .error(String.format("Token policy %s already registered", progTokenPolicyId));
             }
-
 
         } catch (Exception e) {
             return RegisterTransactionContext.error(e.getMessage());
@@ -330,29 +343,34 @@ public class DummySubstandardHandler implements SubstandardHandler {
 
     @Override
     public TransactionContext buildMintTransaction(MintTokenRequest mintTokenRequest,
-                                                   ProtocolBootstrapParams protocolBootstrapParams) {
-
+            ProtocolBootstrapParams protocolBootstrapParams) {
 
         try {
 
-            var issuerUtxosOpt = utxoRepository.findUnspentByOwnerAddr(mintTokenRequest.issuerBaseAddress(), Pageable.unpaged());
+            var issuerUtxosOpt = utxoRepository.findUnspentByOwnerAddr(mintTokenRequest.issuerBaseAddress(),
+                    Pageable.unpaged());
             if (issuerUtxosOpt.isEmpty()) {
                 return TransactionContext.error("issuer wallet is empty");
             }
             var issuerUtxos = issuerUtxosOpt.get().stream().map(UtxoUtil::toUtxo).toList();
 
-            var substandardIssuanceContractOpt = substandardService.getSubstandardValidator(mintTokenRequest.substandardName(), mintTokenRequest.substandardIssueContractName());
+            var substandardIssuanceContractOpt = substandardService.getSubstandardValidator(
+                    mintTokenRequest.substandardName(), mintTokenRequest.substandardIssueContractName());
 
-            var substandardIssueContract = PlutusBlueprintUtil.getPlutusScriptFromCompiledCode(substandardIssuanceContractOpt.get().scriptBytes(), PlutusVersion.v3);
+            var substandardIssueContract = PlutusBlueprintUtil.getPlutusScriptFromCompiledCode(
+                    substandardIssuanceContractOpt.get().scriptBytes(), PlutusVersion.v3);
             log.info("substandardIssueContract: {}", substandardIssueContract.getPolicyId());
 
-            var substandardIssueAddress = AddressProvider.getRewardAddress(substandardIssueContract, network.getCardanoNetwork());
+            var substandardIssueAddress = AddressProvider.getRewardAddress(substandardIssueContract,
+                    network.getCardanoNetwork());
             log.info("substandardIssueAddress: {}", substandardIssueAddress.getAddress());
 
-            var issuanceContract = protocolScriptBuilderService.getParameterizedIssuanceMintScript(protocolBootstrapParams, substandardIssueContract);
+            var issuanceContract = protocolScriptBuilderService
+                    .getParameterizedIssuanceMintScript(protocolBootstrapParams, substandardIssueContract);
             log.info("issuanceContract: {}", issuanceContract.getPolicyId());
 
-            var issuanceRedeemer = ConstrPlutusData.of(0, ConstrPlutusData.of(1, BytesPlutusData.of(substandardIssueContract.getScriptHash())));
+            var issuanceRedeemer = ConstrPlutusData.of(0,
+                    ConstrPlutusData.of(1, BytesPlutusData.of(substandardIssueContract.getScriptHash())));
 
             // Programmable Token Mint
             var programmableToken = Asset.builder()
@@ -366,8 +384,7 @@ public class DummySubstandardHandler implements SubstandardHandler {
                             MultiAsset.builder()
                                     .policyId(issuanceContract.getPolicyId())
                                     .assets(List.of(programmableToken))
-                                    .build()
-                    ))
+                                    .build()))
                     .build();
 
             var recipient = Optional.ofNullable(mintTokenRequest.recipientAddress())
@@ -375,7 +392,8 @@ public class DummySubstandardHandler implements SubstandardHandler {
 
             var recipientAddress = new Address(recipient);
 
-            var targetAddress = AddressProvider.getBaseAddress(Credential.fromScript(protocolBootstrapParams.programmableLogicBaseParams().scriptHash()),
+            var targetAddress = AddressProvider.getBaseAddress(
+                    Credential.fromScript(protocolBootstrapParams.programmableLogicBaseParams().scriptHash()),
                     recipientAddress.getDelegationCredential().get(),
                     network.getCardanoNetwork());
 
@@ -384,13 +402,14 @@ public class DummySubstandardHandler implements SubstandardHandler {
                     .withdraw(substandardIssueAddress.getAddress(), BigInteger.ZERO, BigIntPlutusData.of(100))
                     // Redeemer is DirectoryInit (constr(0))
                     .mintAsset(issuanceContract, programmableToken, issuanceRedeemer)
-                    .payToContract(targetAddress.getAddress(), ValueUtil.toAmountList(progammableTokenValue), ConstrPlutusData.of(0))
+                    .payToContract(targetAddress.getAddress(), ValueUtil.toAmountList(progammableTokenValue),
+                            ConstrPlutusData.of(0))
                     .attachRewardValidator(substandardIssueContract)
                     .withChangeAddress(mintTokenRequest.issuerBaseAddress());
 
             var transaction = quickTxBuilder.compose(tx)
                     .feePayer(mintTokenRequest.issuerBaseAddress())
-                    .mergeOutputs(false) //<-- this is important! or directory tokens will go to same address
+                    .mergeOutputs(false) // <-- this is important! or directory tokens will go to same address
                     .preBalanceTx((txBuilderContext, transaction1) -> {
                         var outputs = transaction1.getBody().getOutputs();
                         if (outputs.getFirst().getAddress().equals(mintTokenRequest.issuerBaseAddress())) {
@@ -427,7 +446,7 @@ public class DummySubstandardHandler implements SubstandardHandler {
 
     @Override
     public TransactionContext buildTransferTransaction(TransferTokenRequest transferTokenRequest,
-                                                       ProtocolBootstrapParams protocolBootstrapParams) {
+            ProtocolBootstrapParams protocolBootstrapParams) {
 
         try {
 
@@ -437,16 +456,19 @@ public class DummySubstandardHandler implements SubstandardHandler {
             log.info("policy id: {}, asset name: {}", progToken.policyId(), progToken.unsafeHumanAssetName());
 
             // Directory SPEND parameterization
-            var directorySpendContract = protocolScriptBuilderService.getParameterizedDirectorySpendScript(protocolBootstrapParams);
+            var directorySpendContract = protocolScriptBuilderService
+                    .getParameterizedDirectorySpendScript(protocolBootstrapParams);
             log.info("directorySpendContract: {}", HexUtil.encodeHexString(directorySpendContract.getScriptHash()));
 
-            var registryEntries = utxoRepository.findUnspentByOwnerPaymentCredential(directorySpendContract.getPolicyId(), Pageable.unpaged());
+            var registryEntries = utxoRepository
+                    .findUnspentByOwnerPaymentCredential(directorySpendContract.getPolicyId(), Pageable.unpaged());
 
             var progTokenRegistryOpt = registryEntries.stream()
                     .flatMap(Collection::stream)
                     .filter(addressUtxoEntity -> {
                         var registryDatumOpt = registryNodeParser.parse(addressUtxoEntity.getInlineDatum());
-                        return registryDatumOpt.map(registryDatum -> registryDatum.key().equals(progToken.policyId())).orElse(false);
+                        return registryDatumOpt.map(registryDatum -> registryDatum.key().equals(progToken.policyId()))
+                                .orElse(false);
                     })
                     .findAny()
                     .map(UtxoUtil::toUtxo);
@@ -460,7 +482,7 @@ public class DummySubstandardHandler implements SubstandardHandler {
             var protocolParamsUtxoOpt = utxoRepository.findById(UtxoId.builder()
                     .txHash(bootstrapTxHash)
                     .outputIndex(0)
-                    .build());
+                    .build());  
 
             if (protocolParamsUtxoOpt.isEmpty()) {
                 return TransactionContext.error("could not resolve protocol params");
@@ -470,16 +492,19 @@ public class DummySubstandardHandler implements SubstandardHandler {
             log.info("protocolParamsUtxo: {}", protocolParamsUtxo);
 
             var senderAddress = new Address(transferTokenRequest.senderAddress());
-            var senderProgrammableTokenAddress = AddressProvider.getBaseAddress(Credential.fromScript(protocolBootstrapParams.programmableLogicBaseParams().scriptHash()),
+            var senderProgrammableTokenAddress = AddressProvider.getBaseAddress(
+                    Credential.fromScript(protocolBootstrapParams.programmableLogicBaseParams().scriptHash()),
                     senderAddress.getDelegationCredential().get(),
                     network.getCardanoNetwork());
 
             var recipientAddress = new Address(transferTokenRequest.recipientAddress());
-            var recipientProgrammableTokenAddress = AddressProvider.getBaseAddress(Credential.fromScript(protocolBootstrapParams.programmableLogicBaseParams().scriptHash()),
+            var recipientProgrammableTokenAddress = AddressProvider.getBaseAddress(
+                    Credential.fromScript(protocolBootstrapParams.programmableLogicBaseParams().scriptHash()),
                     recipientAddress.getDelegationCredential().get(),
                     network.getCardanoNetwork());
 
-            var senderProgTokenAddressesOpt = utxoRepository.findUnspentByOwnerAddr(senderProgrammableTokenAddress.getAddress(), Pageable.unpaged());
+            var senderProgTokenAddressesOpt = utxoRepository
+                    .findUnspentByOwnerAddr(senderProgrammableTokenAddress.getAddress(), Pageable.unpaged());
             var senderProgTokensUtxos = senderProgTokenAddressesOpt.stream()
                     .flatMap(Collection::stream)
                     .map(UtxoUtil::toUtxo)
@@ -487,7 +512,8 @@ public class DummySubstandardHandler implements SubstandardHandler {
 
             var senderProgTokensValue = senderProgTokensUtxos.stream()
                     .map(Utxo::toValue)
-                    .filter(value -> value.amountOf(progToken.policyId(), "0x" + progToken.assetName()).compareTo(BigInteger.ZERO) > 0)
+                    .filter(value -> value.amountOf(progToken.policyId(), "0x" + progToken.assetName())
+                            .compareTo(BigInteger.ZERO) > 0)
                     .reduce(Value::add)
                     .orElse(Value.builder().build());
 
@@ -497,24 +523,30 @@ public class DummySubstandardHandler implements SubstandardHandler {
                 return TransactionContext.error("Not enough funds");
             }
 
-            var senderUtxos = utxoRepository.findUnspentByOwnerAddr(transferTokenRequest.senderAddress(), Pageable.unpaged())
+            var senderUtxos = utxoRepository
+                    .findUnspentByOwnerAddr(transferTokenRequest.senderAddress(), Pageable.unpaged())
                     .stream()
                     .flatMap(Collection::stream)
                     .map(UtxoUtil::toUtxo)
                     .toList();
 
             // Programmable Logic Global parameterization
-            var programmableLogicGlobal = protocolScriptBuilderService.getParameterizedProgrammableLogicGlobalScript(protocolBootstrapParams);
-            var programmableLogicGlobalAddress = AddressProvider.getRewardAddress(programmableLogicGlobal, network.getCardanoNetwork());
+            var programmableLogicGlobal = protocolScriptBuilderService
+                    .getParameterizedProgrammableLogicGlobalScript(protocolBootstrapParams);
+            var programmableLogicGlobalAddress = AddressProvider.getRewardAddress(programmableLogicGlobal,
+                    network.getCardanoNetwork());
             log.info("programmableLogicGlobalAddress policy: {}", programmableLogicGlobalAddress.getAddress());
-            log.info("protocolBootstrapParams.programmableLogicGlobalPrams().scriptHash(): {}", protocolBootstrapParams.programmableLogicGlobalPrams().scriptHash());
+            log.info("protocolBootstrapParams.programmableLogicGlobalPrams().scriptHash(): {}",
+                    protocolBootstrapParams.programmableLogicGlobalPrams().scriptHash());
 
-//            // Programmable Logic Base parameterization
-            var programmableLogicBase = protocolScriptBuilderService.getParameterizedProgrammableLogicBaseScript(protocolBootstrapParams);
+            // // Programmable Logic Base parameterization
+            var programmableLogicBase = protocolScriptBuilderService
+                    .getParameterizedProgrammableLogicBaseScript(protocolBootstrapParams);
             log.info("programmableLogicBase policy: {}", programmableLogicBase.getPolicyId());
 
             // Programmable Token Mint
-            var valueToSend = Value.from(progToken.policyId(), "0x" + progToken.assetName(), new BigInteger(transferTokenRequest.quantity()));
+            var valueToSend = Value.from(progToken.policyId(), "0x" + progToken.assetName(),
+                    new BigInteger(transferTokenRequest.quantity()));
             var returningValue = senderProgTokensValue.subtract(valueToSend);
 
             var tokenAsset2 = Asset.builder()
@@ -528,24 +560,24 @@ public class DummySubstandardHandler implements SubstandardHandler {
                             MultiAsset.builder()
                                     .policyId(progToken.policyId())
                                     .assets(List.of(tokenAsset2))
-                                    .build()
-                    ))
+                                    .build()))
                     .build();
-
 
             var programmableGlobalRedeemer = ConstrPlutusData.of(0,
                     // only one prop and it's a list
-                    ListPlutusData.of(ConstrPlutusData.of(0, BigIntPlutusData.of(1)))
-            );
+                    ListPlutusData.of(ConstrPlutusData.of(0, BigIntPlutusData.of(1))));
 
             // FIXME:
-            var substandardTransferContractOpt = substandardService.getSubstandardValidator("dummy", "transfer.transfer.withdraw");
+            var substandardTransferContractOpt = substandardService.getSubstandardValidator("dummy",
+                    "transfer.transfer.withdraw");
             if (substandardTransferContractOpt.isEmpty()) {
                 log.warn("could not resolve transfer contract");
                 return TransactionContext.error("could not resolve transfer contract");
             }
-            var substandardTransferContract = PlutusBlueprintUtil.getPlutusScriptFromCompiledCode(substandardTransferContractOpt.get().scriptBytes(), PlutusVersion.v3);
-            var substandardTransferAddress = AddressProvider.getRewardAddress(substandardTransferContract, network.getCardanoNetwork());
+            var substandardTransferContract = PlutusBlueprintUtil.getPlutusScriptFromCompiledCode(
+                    substandardTransferContractOpt.get().scriptBytes(), PlutusVersion.v3);
+            var substandardTransferAddress = AddressProvider.getRewardAddress(substandardTransferContract,
+                    network.getCardanoNetwork());
             log.info("substandardTransferAddress: {}", substandardTransferAddress.getAddress());
 
             var inputUtxos = senderProgTokensUtxos.stream()
@@ -554,16 +586,20 @@ public class DummySubstandardHandler implements SubstandardHandler {
                                 if (listValuePair.second().subtract(valueToSend).isPositive()) {
                                     return listValuePair;
                                 } else {
-                                    if (utxo.toValue().amountOf(progToken.policyId(), "0x" + progToken.assetName()).compareTo(BigInteger.ZERO) > 0) {
+                                    if (utxo.toValue().amountOf(progToken.policyId(), "0x" + progToken.assetName())
+                                            .compareTo(BigInteger.ZERO) > 0) {
                                         var newUtxos = Stream.concat(Stream.of(utxo), listValuePair.first().stream());
-                                        return new Pair<>(newUtxos.toList(), listValuePair.second().add(utxo.toValue()));
+                                        return new Pair<>(newUtxos.toList(),
+                                                listValuePair.second().add(utxo.toValue()));
                                     } else {
                                         return listValuePair;
                                     }
                                 }
                             }, (listValuePair, listValuePair2) -> {
-                                var newUtxos = Stream.concat(listValuePair.first().stream(), listValuePair.first().stream());
-                                return new Pair<>(newUtxos.toList(), listValuePair.second().add(listValuePair2.second()));
+                                var newUtxos = Stream.concat(listValuePair.first().stream(),
+                                        listValuePair.first().stream());
+                                return new Pair<>(newUtxos.toList(),
+                                        listValuePair.second().add(listValuePair2.second()));
                             })
                     .first();
 
@@ -571,21 +607,24 @@ public class DummySubstandardHandler implements SubstandardHandler {
                     .collectFrom(senderUtxos);
 
             inputUtxos.forEach(utxo -> {
-                 tx.collectFrom(utxo, ConstrPlutusData.of(0));
+                tx.collectFrom(utxo, ConstrPlutusData.of(0));
             });
 
             // must be first Provide proofs
             tx.withdraw(substandardTransferAddress.getAddress(), BigInteger.ZERO, BigIntPlutusData.of(200))
                     .withdraw(programmableLogicGlobalAddress.getAddress(), BigInteger.ZERO, programmableGlobalRedeemer)
-                    .payToContract(senderProgrammableTokenAddress.getAddress(), ValueUtil.toAmountList(returningValue), ConstrPlutusData.of(0))
-                    .payToContract(recipientProgrammableTokenAddress.getAddress(), ValueUtil.toAmountList(tokenValue2), ConstrPlutusData.of(0))
+                    .payToContract(senderProgrammableTokenAddress.getAddress(), ValueUtil.toAmountList(returningValue),
+                            ConstrPlutusData.of(0))
+                    .payToContract(recipientProgrammableTokenAddress.getAddress(), ValueUtil.toAmountList(tokenValue2),
+                            ConstrPlutusData.of(0))
                     .readFrom(TransactionInput.builder()
                             .transactionId(protocolParamsUtxo.getTxHash())
                             .index(protocolParamsUtxo.getOutputIndex())
-                            .build(), TransactionInput.builder()
-                            .transactionId(progTokenRegistry.getTxHash())
-                            .index(progTokenRegistry.getOutputIndex())
-                            .build())
+                            .build(),
+                            TransactionInput.builder()
+                                    .transactionId(progTokenRegistry.getTxHash())
+                                    .index(progTokenRegistry.getOutputIndex())
+                                    .build())
                     .attachRewardValidator(programmableLogicGlobal) // global
                     .attachRewardValidator(substandardTransferContract)
                     .attachSpendingValidator(programmableLogicBase) // base
@@ -603,18 +642,23 @@ public class DummySubstandardHandler implements SubstandardHandler {
                         transaction1.getBody()
                                 .getOutputs()
                                 .stream()
-                                .filter(transactionOutput -> senderAddress.getAddress().equals(transactionOutput.getAddress()) && transactionOutput.getValue().getCoin().compareTo(BigInteger.valueOf(2_000_000)) > 0)
+                                .filter(transactionOutput -> senderAddress.getAddress()
+                                        .equals(transactionOutput.getAddress())
+                                        && transactionOutput.getValue().getCoin()
+                                                .compareTo(BigInteger.valueOf(2_000_000)) > 0)
                                 .findAny()
                                 .ifPresent(transactionOutput -> {
-                                    transactionOutput.setValue(transactionOutput.getValue().substractCoin(BigInteger.valueOf(200_000L)));
+                                    transactionOutput.setValue(
+                                            transactionOutput.getValue().substractCoin(BigInteger.valueOf(200_000L)));
                                 });
 
-                        transaction1.getBody().setTotalCollateral(transaction1.getBody().getTotalCollateral().add(BigInteger.valueOf(500_000L)));
+                        transaction1.getBody().setTotalCollateral(
+                                transaction1.getBody().getTotalCollateral().add(BigInteger.valueOf(500_000L)));
                         var collateralReturn = transaction1.getBody().getCollateralReturn();
-                        collateralReturn.setValue(collateralReturn.getValue().substractCoin(BigInteger.valueOf(500_000L)));
+                        collateralReturn
+                                .setValue(collateralReturn.getValue().substractCoin(BigInteger.valueOf(500_000L)));
                     })
                     .build();
-
 
             log.info("tx: {}", transaction.serializeToHex());
             log.info("tx: {}", objectMapper.writeValueAsString(transaction));
@@ -635,7 +679,8 @@ public class DummySubstandardHandler implements SubstandardHandler {
 
     @Override
     public PlutusScript getParameterizedIssueValidator(String contractName, Object... params) {
-        // Dummy validators are NOT parameterized - they are simple reference implementations
+        // Dummy validators are NOT parameterized - they are simple reference
+        // implementations
         var validatorOpt = substandardService.getSubstandardValidator(getSubstandardId(), contractName);
 
         if (validatorOpt.isEmpty()) {
@@ -645,8 +690,7 @@ public class DummySubstandardHandler implements SubstandardHandler {
         var validator = validatorOpt.get();
         var script = PlutusBlueprintUtil.getPlutusScriptFromCompiledCode(
                 validator.scriptBytes(),
-                PlutusVersion.v3
-        );
+                PlutusVersion.v3);
 
         try {
             log.debug("Retrieved dummy issue validator '{}' with script hash: {}", contractName, script.getPolicyId());
@@ -658,7 +702,8 @@ public class DummySubstandardHandler implements SubstandardHandler {
 
     @Override
     public PlutusScript getParameterizedTransferValidator(String contractName, Object... params) {
-        // Dummy validators are NOT parameterized - they are simple reference implementations
+        // Dummy validators are NOT parameterized - they are simple reference
+        // implementations
         var validatorOpt = substandardService.getSubstandardValidator(getSubstandardId(), contractName);
 
         if (validatorOpt.isEmpty()) {
@@ -668,11 +713,11 @@ public class DummySubstandardHandler implements SubstandardHandler {
         var validator = validatorOpt.get();
         var script = PlutusBlueprintUtil.getPlutusScriptFromCompiledCode(
                 validator.scriptBytes(),
-                PlutusVersion.v3
-        );
+                PlutusVersion.v3);
 
         try {
-            log.debug("Retrieved dummy transfer validator '{}' with script hash: {}", contractName, script.getPolicyId());
+            log.debug("Retrieved dummy transfer validator '{}' with script hash: {}", contractName,
+                    script.getPolicyId());
         } catch (Exception e) {
             log.debug("Retrieved dummy transfer validator '{}' (could not compute policy ID)", contractName);
         }

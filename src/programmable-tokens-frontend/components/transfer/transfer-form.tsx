@@ -5,10 +5,14 @@ import { useWallet } from '@meshsdk/react';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { Badge } from '@/components/ui/badge';
-import { transferToken, getWalletBalance, parseWalletBalance } from '@/lib/api';
+import { TransactionBuilderToggle, TransactionBuilder } from '@/components/mint/transaction-builder-toggle';
+import { transferToken, getWalletBalance, parseWalletBalance, getProtocolBlueprint, getProtocolBootstrap, getSubstandardBlueprint } from '@/lib/api';
 import { useToast } from '@/components/ui/use-toast';
 import { TransferTokenRequest, ParsedAsset } from '@/types/api';
 import { useProtocolVersion } from '@/contexts/protocol-version-context';
+import { getSubstandardHandler } from '@/lib/standard/factory';
+import type { TransferTransactionParams } from '@/lib/standard/factory';
+import type { IWallet } from '@meshsdk/core';
 import { ChevronDown, RefreshCw, Coins } from 'lucide-react';
 import { cn } from '@/lib/utils';
 
@@ -32,6 +36,7 @@ export function TransferForm({ onTransactionBuilt }: TransferFormProps) {
   const [isLoadingBalances, setIsLoadingBalances] = useState(false);
   const [quantity, setQuantity] = useState('');
   const [recipientAddress, setRecipientAddress] = useState('');
+  const [transactionBuilder, setTransactionBuilder] = useState<TransactionBuilder>('backend');
   const [isBuilding, setIsBuilding] = useState(false);
   const [showDropdown, setShowDropdown] = useState(false);
 
@@ -160,16 +165,61 @@ export function TransferForm({ onTransactionBuilt }: TransferFormProps) {
       }
       const senderAddress = addresses[0];
 
-      // Prepare transfer request
-      const request: TransferTokenRequest = {
-        senderAddress,
-        unit: selectedAsset!.unit,
-        quantity,
-        recipientAddress: recipientAddress.trim(),
-      };
+      let unsignedCborTx: string;
 
-      // Call backend to build transfer transaction
-      const unsignedCborTx = await transferToken(request, selectedVersion?.txHash);
+      if (transactionBuilder === 'frontend') {
+        // Client-side transaction building
+        showToast({
+          title: 'Building Transaction',
+          description: 'Building transaction on client side...',
+          variant: 'default',
+        });
+
+        // Extract policy ID and substandard from the asset
+        // We need to determine the substandard from the asset metadata
+        // For now, we'll try to get it from the balance response or use 'dummy' as default
+        const substandardId = 'dummy'; // Default - you may want to store this with the asset
+        
+        // Fetch protocol data
+        const protocolTxHash = selectedVersion?.txHash;
+        const [protocolBlueprint, protocolBootstrap, substandardBlueprint] = await Promise.all([
+          getProtocolBlueprint(),
+          getProtocolBootstrap(protocolTxHash),
+          getSubstandardBlueprint(substandardId),
+        ]);
+
+        // Get substandard handler
+        const handler = getSubstandardHandler(substandardId as 'dummy' | 'bafin');
+
+        // Prepare transfer parameters
+        const transferParams: TransferTransactionParams = {
+          unit: selectedAsset!.unit,
+          quantity,
+          senderAddress,
+          recipientAddress: recipientAddress.trim(),
+          networkId: 0, // Preview/testnet
+        };
+
+        // Build transaction client-side
+        unsignedCborTx = await handler.buildTransferTransaction(
+          transferParams,
+          protocolBootstrap,
+          protocolBlueprint,
+          substandardBlueprint,
+          wallet as IWallet
+        );
+      } else {
+        // Server-side transaction building (existing logic)
+        const request: TransferTokenRequest = {
+          senderAddress,
+          unit: selectedAsset!.unit,
+          quantity,
+          recipientAddress: recipientAddress.trim(),
+        };
+
+        // Call backend to build transfer transaction
+        unsignedCborTx = await transferToken(request, selectedVersion?.txHash);
+      }
 
       showToast({
         title: 'Transaction Built',
@@ -366,6 +416,13 @@ export function TransferForm({ onTransactionBuilt }: TransferFormProps) {
           helperText="Cardano address of the recipient"
         />
       </div>
+
+      {/* Transaction Builder Toggle */}
+      <TransactionBuilderToggle
+        value={transactionBuilder}
+        onChange={setTransactionBuilder}
+        disabled={isBuilding}
+      />
 
       {/* Submit Button */}
       <Button

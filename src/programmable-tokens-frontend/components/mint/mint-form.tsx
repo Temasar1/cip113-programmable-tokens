@@ -10,8 +10,9 @@ import { Substandard, MintFormData } from '@/types/api';
 import { prepareMintRequest, mintToken, stringToHex, getProtocolBlueprint, getProtocolBootstrap, getSubstandardBlueprint } from '@/lib/api';
 import { useToast } from '@/components/ui/use-toast';
 import { useProtocolVersion } from '@/contexts/protocol-version-context';
-import { getSubstandardHandler } from '@/lib/substandards/factory';
-import type { MintTransactionParams } from '@/lib/substandards/dummy-handler';
+import { getSubstandardHandler } from '@/lib/standard/factory';
+import type { MintTransactionParams } from '@/lib/standard/factory';
+import { IWallet } from '@meshsdk/core';
 
 interface MintFormProps {
   substandards: Substandard[];
@@ -139,7 +140,7 @@ export function MintForm({
 
         // Prepare mint parameters
         const mintParams: MintTransactionParams = {
-          assetName: stringToHex(tokenName),
+          assetName: tokenName,
           quantity,
           issuerBaseAddress: issuerAddress,
           recipientAddress: recipientAddress.trim() || undefined,
@@ -153,7 +154,7 @@ export function MintForm({
           protocolBootstrap,
           protocolBlueprint,
           substandardBlueprint,
-          wallet
+          wallet as IWallet
         );
       } else {
         // Server-side transaction building (existing logic)

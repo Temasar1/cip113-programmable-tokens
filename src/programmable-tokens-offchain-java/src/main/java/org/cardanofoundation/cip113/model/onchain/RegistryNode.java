@@ -8,10 +8,10 @@ import lombok.Builder;
 
 @Builder(toBuilder = true)
 public record RegistryNode(String key,
-                           String next,
-                           String transferLogicScript,
-                           String thirdPartyTransferLogicScript,
-                           String globalStatePolicyId) {
+        String next,
+        String transferLogicScript,
+        String thirdPartyTransferLogicScript,
+        String globalStatePolicyId) {
 
     public PlutusData toPlutusData() {
 
@@ -30,7 +30,6 @@ public record RegistryNode(String key,
                     ConstrPlutusData.of(1, BytesPlutusData.of(HexUtil.decodeHexString(thirdPartyTransferLogicScript))),
                     BytesPlutusData.of(HexUtil.decodeHexString(globalStatePolicyId)));
         }
-
 
     }
 

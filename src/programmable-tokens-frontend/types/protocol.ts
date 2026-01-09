@@ -44,6 +44,14 @@ export interface ProtocolBootstrapParams {
   txHash: string;
 }
 
+export type RegistryDatum = {
+  key: string;
+  next: any;
+  transferScriptHash: string;
+  thirdPartyScriptHash: string;
+  metadata: any;
+};
+
 export interface BlueprintValidator {
   title: string;
   compiledCode: string;

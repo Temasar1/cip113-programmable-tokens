@@ -11,7 +11,8 @@
   },
   "dependencies": {
     "@hookform/resolvers": "^3.9.0",
-    "@meshsdk/core": "^1.7.10",
+    "@meshsdk/core": "^1.9.0-beta.93",
+    "@meshsdk/core-cst": "^1.9.0-beta.93",
     "@meshsdk/react": "^1.7.10",
     "@utxorpc/sdk": "^0.7.0",
     "@utxorpc/spec": "^0.18.1",
